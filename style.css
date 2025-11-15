@@ -1,0 +1,86 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f2f5; /* 페이지 배경색 */
+    display: flex;
+    justify-content: center; /* 가로 중앙 */
+    align-items: center; /* 세로 중앙 */
+    min-height: 100vh; /* 화면 전체 높이 */
+    margin: 0;
+}
+
+/* 로그인 컨테이너 (흰색 박스) */
+.login-container {
+    background-color: #ffffff;
+    padding: 2rem;
+    border-radius: 8px; /* 모서리 둥글게 */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* 그림자 효과 */
+    width: 300px;
+    max-width: 90%;
+}
+
+/* 폼 기본 스타일 */
+#login-form {
+    display: flex;
+    flex-direction: column; /* 요소들을 세로로 정렬 */
+}
+
+/* "로그인" 제목 */
+h2 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 1.5rem;
+}
+
+/* 입력창 그룹 (라벨 + 입력창) */
+.input-group {
+    margin-bottom: 1rem;
+}
+
+.input-group label {
+    display: block; /* 라벨이 한 줄을 다 차지하도록 */
+    margin-bottom: 0.5rem;
+    color: #555;
+}
+
+/* 아이디, 비밀번호 입력창 */
+.input-group input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box; /* 패딩을 포함하여 너비 100% 설정 */
+}
+
+/* 로그인 버튼 */
+.login-button {
+    background-color: #007bff; /* 버튼 배경색 */
+    color: white; /* 글자색 */
+    padding: 0.75rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer; /* 마우스 올리면 손가락 모양 */
+    transition: background-color 0.3s ease; /* 부드러운 색상 변경 */
+}
+
+/* 로그인 버튼에 마우스 올렸을 때 */
+.login-button:hover {
+    background-color: #0056b3;
+}
+
+/* 비밀번호 찾기, 회원가입 링크 */
+.options {
+    display: flex;
+    justify-content: space-between; /* 양쪽 끝으로 정렬 */
+    margin-top: 1rem;
+}
+
+.options a {
+    color: #007bff;
+    text-decoration: none; /* 밑줄 제거 */
+    font-size: 0.9rem;
+}
+
+.options a:hover {
+    text-decoration: underline; /* 마우스 올리면 밑줄 표시 */
+}
