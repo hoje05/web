@@ -1,9 +1,10 @@
-// 1. 필요한 프로그램들 (세션 관련 2줄 추가)
+// 1. 필요한 프로그램들 (crypto 추가)
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcrypt');
-const session = require('express-session'); // (새로 추가) 세션
-const SQLiteStore = require('connect-sqlite3')(session); // (새로 추가) 세션 저장소
+const session = require('express-session');
+const SQLiteStore = require('connect-sqlite3')(session);
+const crypto = require('crypto'); // (새로 추가) 암호화 토큰 생성
 
 // 2. 서버 설정
 const app = express();
@@ -11,14 +12,13 @@ const port = 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// (새로 추가) 3. 세션 설정
-// "secret-key"는 아무도 모르게 바꿔주세요.
+// 3. 세션 설정
 app.use(session({
-    store: new SQLiteStore({ db: 'sessions.db' }), // 세션 정보를 'sessions.db' 파일에 저장
-    secret: 'your-very-secret-key', // 세션 암호화 키
+    store: new SQLiteStore({ db: 'sessions.db' }),
+    secret: 'your-very-secret-key', // 비밀키
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 1000 * 60 * 60 * 24 } // 쿠키 유효기간 (예: 1일)
+    cookie: { maxAge: 1000 * 60 * 60 * 24 } // 1일
 }));
 
 // 4. 데이터베이스(DB) 연결
@@ -27,27 +27,29 @@ const db = new sqlite3.Database('./database.db', (err) => {
         console.error('DB 연결 오류:', err.message);
     } else {
         console.log('데이터베이스에 성공적으로 연결되었습니다.');
-        // (수정) 'users' 테이블에 role(역할) 컬럼 추가
+        // (수정) 'users' 테이블에 비밀번호 재설정(reset) 컬럼 2개 추가
         db.run(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
-            email TEXT,
+            email TEXT UNIQUE, 
             password_hash TEXT,
-            role TEXT DEFAULT 'user' 
-        )`); // 'user' (일반사용자) 또는 'admin' (관리자)
+            role TEXT DEFAULT 'user',
+            reset_token TEXT,
+            reset_token_expires INTEGER
+        )`);
+        // (참고) email에도 UNIQUE를 추가해서 중복 가입을 방지합니다.
     }
 });
 
 // 5. 프론트엔드 파일들 제공하기
 app.use(express.static('.'));
 
-// --- API (기능) 만들기 ---
+// --- 기존 API (로그인, 회원가입 등) ---
+// (이전과 동일... /signup, /login, /logout, /check-session)
 
-// 6. 회원가입 API (/signup)
 app.post('/signup', async (req, res) => {
     const { username, email, password } = req.body;
 
-    // (수정) 첫 번째 가입자를 'admin'으로 자동 지정
     let userRole = 'user';
     const count = await new Promise((resolve, reject) => {
         db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
@@ -68,7 +70,7 @@ app.post('/signup', async (req, res) => {
     db.run(sql, [username, email, password_hash, userRole], function (err) {
         if (err) {
             if (err.message.includes('UNIQUE constraint failed')) {
-                return res.status(400).json({ success: false, error: '이미 사용 중인 아이디입니다.' });
+                return res.status(400).json({ success: false, error: '이미 사용 중인 아이디 또는 이메일입니다.' });
             }
             return res.status(500).json({ success: false, error: err.message });
         }
@@ -76,26 +78,16 @@ app.post('/signup', async (req, res) => {
     });
 });
 
-// 7. 로그인 API (/login)
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
-
     const sql = `SELECT * FROM users WHERE username = ?`;
     db.get(sql, [username], async (err, row) => {
         if (err || !row) {
             return res.status(400).json({ success: false, error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
         }
-
         const match = await bcrypt.compare(password, row.password_hash);
-
         if (match) {
-            // (중요) 로그인 성공 시, 세션에 사용자 정보 저장
-            req.session.user = {
-                id: row.id,
-                username: row.username,
-                role: row.role // 'user' 또는 'admin'
-            };
-            // (수정) 성공 응답 시, role 정보도 함께 전달
+            req.session.user = { id: row.id, username: row.username, role: row.role };
             res.json({ success: true, role: row.role });
         } else {
             return res.status(400).json({ success: false, error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
@@ -103,44 +95,33 @@ app.post('/login', (req, res) => {
     });
 });
 
-// (새로 추가) 8. 로그아웃 API (/logout)
 app.post('/logout', (req, res) => {
-    req.session.destroy((err) => { // 세션 파괴
+    req.session.destroy((err) => {
         if (err) {
             return res.status(500).json({ success: false, error: '로그아웃 실패' });
         }
-        res.clearCookie('connect.sid'); // 세션 쿠키 삭제
+        res.clearCookie('connect.sid');
         res.json({ success: true });
     });
 });
 
-// (새로 추가) 9. 세션 확인 API (/check-session)
-// (페이지가 로드될 때, "지금 로그인한 사람이 누군지" 확인하는 용도)
 app.get('/check-session', (req, res) => {
     if (req.session.user) {
-        // 로그인 상태 O
         res.json({ loggedIn: true, user: req.session.user });
     } else {
-        // 로그인 상태 X
         res.json({ loggedIn: false });
     }
 });
 
-
-// --- (새로 추가) 관리자 전용 API ---
-
-// (새로 추가) 10. 관리자인지 확인하는 '미들웨어' (보안 검문소)
+// --- 관리자 전용 API ---
 const isAdmin = (req, res, next) => {
     if (req.session.user && req.session.user.role === 'admin') {
-        next(); // 통과 (관리자 맞음)
+        next();
     } else {
-        // 통과 실패 (관리자 아님)
         res.status(403).json({ success: false, error: '권한이 없습니다.' });
     }
 };
-
-// (새로 추가) 11. 모든 회원 목록 가져오기 (관리자 전용)
-app.get('/api/users', isAdmin, (req, res) => { // 'isAdmin' 검문소를 통과해야만 실행됨
+app.get('/api/users', isAdmin, (req, res) => {
     const sql = "SELECT id, username, email, role FROM users";
     db.all(sql, [], (err, rows) => {
         if (err) {
@@ -149,30 +130,93 @@ app.get('/api/users', isAdmin, (req, res) => { // 'isAdmin' 검문소를 통과�
         res.json({ success: true, users: rows });
     });
 });
-
-// (새로 추가) 12. 특정 회원 삭제하기 (관리자 전용)
-app.delete('/api/users/:id', isAdmin, (req, res) => { // 'isAdmin' 검문소를 통과해야만 실행됨
-    const id = req.params.id; // 주소에서 :id 값을 가져옴
-
-    // (보안) 관리자 자기 자신은 삭제하지 못하게 막기
+app.delete('/api/users/:id', isAdmin, (req, res) => {
+    const id = req.params.id;
     if (req.session.user.id == id) {
         return res.status(400).json({ success: false, error: '자기 자신을 삭제할 수 없습니다.' });
     }
-
     const sql = "DELETE FROM users WHERE id = ?";
     db.run(sql, [id], function (err) {
         if (err) {
             return res.status(500).json({ success: false, error: err.message });
-        }
-        if (this.changes === 0) {
-            return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
         }
         res.json({ success: true });
     });
 });
 
 
-// 13. 서버 실행
+// --- (새로 추가) 비밀번호 찾기 API ---
+
+// 1. 비밀번호 재설정 요청 (토큰 생성 및 '이메일' 시뮬레이션)
+app.post('/forgot-password', (req, res) => {
+    const { email } = req.body;
+    
+    // 1-1. DB에서 이메일로 사용자 찾기
+    const sql = `SELECT * FROM users WHERE email = ?`;
+    db.get(sql, [email], (err, row) => {
+        if (err || !row) {
+            // 일부러 성공한 것처럼 응답 (보안 - 이메일 존재 여부를 알려주지 않기 위함)
+            return res.json({ success: true, message: '재설정 링크가 전송되었습니다 (콘솔을 확인하세요).' });
+        }
+
+        // 1-2. 임시 토큰 생성 (32바이트 랜덤 문자열)
+        const token = crypto.randomBytes(32).toString('hex');
+        // 1-3. 토큰 만료 시간 설정 (지금으로부터 1시간 뒤)
+        const expires = Date.now() + 1000 * 60 * 60; // 1시간 (밀리초 단위)
+
+        // 1-4. DB에 토큰과 만료 시간 저장
+        const updateSql = `UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?`;
+        db.run(updateSql, [token, expires, email], (err) => {
+            if (err) {
+                return res.status(500).json({ success: false, error: '토큰 저장 중 오류' });
+            }
+
+            // 1-5. (중요) 이메일 전송 "시뮬레이션"
+            // (실제로는 여기서 Nodemailer로 이메일을 보냅니다)
+            const resetLink = `http://localhost:3000/reset-password.html?token=${token}`;
+            console.log('--- [비밀번호 재설정 시뮬레이션] ---');
+            console.log(`[To]: ${email}`);
+            console.log('[Message]: 비밀번호를 재설정하려면 아래 링크를 클릭하세요 (1시간 유효).');
+            console.log(`[Link]: ${resetLink}`);
+            console.log('------------------------------------');
+
+            res.json({ success: true, message: '재설정 링크가 전송되었습니다 (콘솔을 확인하세요).' });
+        });
+    });
+});
+
+// 2. 비밀번호 재설정 실행 (토큰 검증 및 비밀번호 변경)
+app.post('/reset-password', async (req, res) => {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+        return res.status(400).json({ success: false, error: '토큰과 새 비밀번호가 필요합니다.' });
+    }
+
+    // 2-1. 토큰으로 사용자 찾기 (유효시간 1시간 이내)
+    const sql = `SELECT * FROM users WHERE reset_token = ? AND reset_token_expires > ?`;
+    db.get(sql, [token, Date.now()], async (err, row) => {
+        if (err || !row) {
+            return res.status(400).json({ success: false, error: '유효하지 않거나 만료된 토큰입니다.' });
+        }
+
+        // 2-2. 토큰이 유효하면 -> 새 비밀번호 암호화
+        const saltRounds = 10;
+        const password_hash = await bcrypt.hash(password, saltRounds);
+
+        // 2-3. DB 업데이트 (새 비밀번호 저장, 사용한 토큰은 삭제)
+        const updateSql = `UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?`;
+        db.run(updateSql, [password_hash, row.id], (err) => {
+            if (err) {
+                return res.status(500).json({ success: false, error: '비밀번호 업데이트 중 오류' });
+            }
+            res.json({ success: true });
+        });
+    });
+});
+
+
+// (서버 실행)
 app.listen(port, () => {
     console.log(`서버가 http://localhost:${port} 에서 실행 중입니다.`);
 });
