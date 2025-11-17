@@ -1,0 +1,544 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Application, Graphics } from "pixi.js";
+
+type HelloMessage = {
+  t: "hello";
+  w: number;
+  h: number;
+  palette: number;
+  ts: number;
+};
+
+type PixelMessage = {
+  t: "px";
+  x: number;
+  y: number;
+  c: number;
+  ts: number;
+};
+
+type WsMessage = HelloMessage | PixelMessage;
+
+const CELL_SIZE = 4;
+
+// 팔레트 (색 인덱스 -> 색상)
+const PALETTE_HEX = [
+  "#ffffff", // 0
+  "#000000", // 1
+  "#ff0000", // 2
+  "#00ff00", // 3
+  "#0000ff", // 4
+  "#ffff00", // 5
+  "#ff00ff", // 6
+  "#00ffff", // 7
+  "#888888", // 8
+  "#ff8800", // 9
+];
+
+function colorIndexToPixi(c: number): number {
+  const hex = PALETTE_HEX[c] ?? "#ffffff";
+  return parseInt(hex.replace("#", ""), 16);
+}
+
+export default function Home() {
+  const [result, setResult] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const [wsStatus, setWsStatus] = useState<
+    "connecting" | "open" | "closed" | "error"
+  >("connecting");
+  const [helloInfo, setHelloInfo] = useState<HelloMessage | null>(null);
+  const [lastPixel, setLastPixel] = useState<PixelMessage | null>(null);
+
+  // 색 선택
+  const [selectedColor, setSelectedColor] = useState<number>(3);
+  const selectedColorRef = useRef<number>(3);
+  useEffect(() => {
+    selectedColorRef.current = selectedColor;
+  }, [selectedColor]);
+
+  // 색 설정 bar 표시 여부 (우상단 버튼으로 토글)
+  const [showColorBar, setShowColorBar] = useState(false);
+
+  // 선택된 타일 상태
+  const [selectedTile, setSelectedTile] = useState<{ x: number; y: number } | null>(
+    null
+  );
+  const selectedTileRef = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    selectedTileRef.current = selectedTile;
+  }, [selectedTile]);
+
+  const helloInfoRef = useRef<HelloMessage | null>(null);
+  useEffect(() => {
+    helloInfoRef.current = helloInfo;
+  }, [helloInfo]);
+
+  const pixiContainerRef = useRef<HTMLDivElement | null>(null);
+  const pixiAppRef = useRef<Application | null>(null);
+  const graphicsRef = useRef<Graphics | null>(null);
+  const gridGraphicsRef = useRef<Graphics | null>(null);
+  const selectionGraphicsRef = useRef<Graphics | null>(null);
+  const boardRef = useRef<Uint8Array | null>(null);
+
+  // WebSocket 연결
+  useEffect(() => {
+    const ws = new WebSocket("ws://localhost:4000/ws");
+    setWsStatus("connecting");
+
+    ws.onopen = () => {
+      setWsStatus("open");
+      console.log("[ws] connected");
+    };
+
+    ws.onclose = () => {
+      setWsStatus("closed");
+      console.log("[ws] closed");
+    };
+
+    ws.onerror = (err) => {
+      setWsStatus("error");
+      console.error("[ws] error", err);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg: WsMessage = JSON.parse(event.data);
+
+        if (msg.t === "hello") {
+          setHelloInfo(msg);
+          boardRef.current = new Uint8Array(msg.w * msg.h);
+
+          // 초기 스냅샷
+          fetch("http://localhost:4000/board/snapshot")
+            .then((res) => res.json())
+            .then((snapshot) => {
+              if (
+                snapshot &&
+                typeof snapshot.w === "number" &&
+                typeof snapshot.h === "number" &&
+                Array.isArray(snapshot.data)
+              ) {
+                const arr = new Uint8Array(snapshot.data);
+                boardRef.current = arr;
+                drawFullBoard(msg.w, msg.h, arr);
+                drawGrid(msg.w, msg.h);
+              }
+            })
+            .catch((e) => {
+              console.error("snapshot fetch error:", e);
+            });
+        } else if (msg.t === "px") {
+          setLastPixel(msg);
+          applyPixel(msg.x, msg.y, msg.c);
+        }
+      } catch (e) {
+        console.error("WS message parse error:", e);
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 서버에 픽셀 찍기
+  const paintSelectedTile = async () => {
+    if (!selectedTile) {
+      setResult("먼저 타일을 클릭해서 선택해 주세요.");
+      return;
+    }
+
+    const { x, y } = selectedTile;
+
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const res = await fetch("http://localhost:4000/pixels/place", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          x,
+          y,
+          color: selectedColorRef.current,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        setResult(`실패: ${data.error || "알 수 없는 오류"}`);
+        return;
+      }
+
+      setResult(
+        `Paint 성공! (x=${x}, y=${y}, color=${selectedColorRef.current})`
+      );
+    } catch (error) {
+      console.error(error);
+      setResult("요청 중 오류 발생");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Pixi 초기화
+  useEffect(() => {
+    if (!helloInfo) return;
+    if (!pixiContainerRef.current) return;
+    if (pixiAppRef.current) return; // 이미 초기화면 스킵
+
+    const width = helloInfo.w * CELL_SIZE;
+    const height = helloInfo.h * CELL_SIZE;
+
+    const app = new Application();
+    pixiAppRef.current = app;
+
+    (async () => {
+      await app.init({
+        width,
+        height,
+        background: 0xffffff,
+        antialias: false,
+      });
+
+      const canvas = app.canvas;
+      canvas.oncontextmenu = (e) => e.preventDefault();
+      pixiContainerRef.current?.appendChild(canvas);
+
+      const g = new Graphics();
+      graphicsRef.current = g;
+      app.stage.addChild(g);
+
+      const gridG = new Graphics();
+      gridGraphicsRef.current = gridG;
+      app.stage.addChild(gridG);
+
+      const sg = new Graphics();
+      selectionGraphicsRef.current = sg;
+      app.stage.addChild(sg);
+
+      if (boardRef.current) {
+        drawFullBoard(helloInfo.w, helloInfo.h, boardRef.current);
+      }
+      drawGrid(helloInfo.w, helloInfo.h);
+
+      // 인터랙션
+      app.stage.eventMode = "static";
+      app.stage.hitArea = app.screen;
+
+      let isPointerDown = false;
+      let isPanning = false;
+      let downX = 0;
+      let downY = 0;
+      let lastPanX = 0;
+      let lastPanY = 0;
+      const DRAG_THRESHOLD = 5;
+
+      let currentScale = 1;
+
+      app.stage.on("pointerdown", (event: any) => {
+        const info = helloInfoRef.current;
+        if (!info) return;
+        if (event.button !== 0) return; // 왼쪽 버튼만
+
+        isPointerDown = true;
+        isPanning = false;
+
+        downX = event.global.x;
+        downY = event.global.y;
+        lastPanX = event.global.x;
+        lastPanY = event.global.y;
+      });
+
+      app.stage.on("pointermove", (event: any) => {
+        if (!isPointerDown) return;
+
+        const moveDist = Math.hypot(
+          event.global.x - downX,
+          event.global.y - downY
+        );
+
+        if (!isPanning && moveDist > DRAG_THRESHOLD) {
+          isPanning = true;
+        }
+
+        if (isPanning) {
+          const dx = event.global.x - lastPanX;
+          const dy = event.global.y - lastPanY;
+          lastPanX = event.global.x;
+          lastPanY = event.global.y;
+
+          app.stage.x += dx;
+          app.stage.y += dy;
+        }
+      });
+
+      app.stage.on("pointerup", (event: any) => {
+        if (!isPointerDown) return;
+        if (event.button !== 0) return;
+        isPointerDown = false;
+
+        const info = helloInfoRef.current;
+        if (!info) return;
+
+        if (isPanning) {
+          isPanning = false;
+          return;
+        }
+
+        const global = event.global;
+
+        const worldX = (global.x - app.stage.x) / currentScale;
+        const worldY = (global.y - app.stage.y) / currentScale;
+
+        const x = Math.floor(worldX / CELL_SIZE);
+        const y = Math.floor(worldY / CELL_SIZE);
+
+        if (x < 0 || y < 0 || x >= info.w || y >= info.h) return;
+
+        setSelectedTile({ x, y });
+        selectedTileRef.current = { x, y };
+
+        const selG = selectionGraphicsRef.current;
+        if (selG) {
+          selG.clear();
+          selG.lineStyle(1, 0x000000);
+          selG.drawRect(
+            x * CELL_SIZE,
+            y * CELL_SIZE,
+            CELL_SIZE,
+            CELL_SIZE
+          );
+        }
+      });
+
+      app.stage.on("pointerupoutside", () => {
+        isPointerDown = false;
+        isPanning = false;
+      });
+
+      // 휠 줌
+      const onWheel = (e: WheelEvent) => {
+        e.preventDefault();
+        const info = helloInfoRef.current;
+        if (!info) return;
+
+        const { offsetX, offsetY, deltaY } = e;
+
+        const zoomFactor = deltaY < 0 ? 1.1 : 0.9;
+        const newScale = Math.min(8, Math.max(0.5, currentScale * zoomFactor));
+
+        const worldX = (offsetX - app.stage.x) / currentScale;
+        const worldY = (offsetY - app.stage.y) / currentScale;
+
+        app.stage.x = offsetX - worldX * newScale;
+        app.stage.y = offsetY - worldY * newScale;
+
+        currentScale = newScale;
+        app.stage.scale.set(currentScale);
+      };
+
+      canvas.addEventListener("wheel", onWheel, { passive: false });
+
+      return () => {
+        canvas.removeEventListener("wheel", onWheel);
+      };
+    })();
+
+    return () => {
+      pixiAppRef.current?.destroy(true);
+      pixiAppRef.current = null;
+      graphicsRef.current = null;
+      gridGraphicsRef.current = null;
+      selectionGraphicsRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [helloInfo]);
+
+  // 전체 보드 그리기
+  function drawFullBoard(w: number, h: number, data: Uint8Array) {
+    const g = graphicsRef.current;
+    if (!g) return;
+
+    g.clear();
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        const colorIndex = data[i] ?? 0;
+        const color = colorIndexToPixi(colorIndex);
+        g.beginFill(color);
+        g.drawRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        g.endFill();
+      }
+    }
+  }
+
+  // 격자선 (각 도트 구분용)
+  function drawGrid(w: number, h: number) {
+    const gridG = gridGraphicsRef.current;
+    if (!gridG) return;
+
+    gridG.clear();
+    gridG.lineStyle(0.5, 0x000000, 0.5); // 얇은 검은색
+
+    // 가로선
+    for (let y = 0; y <= h; y++) {
+      const yPos = y * CELL_SIZE;
+      gridG.moveTo(0, yPos);
+      gridG.lineTo(w * CELL_SIZE, yPos);
+    }
+
+    // 세로선
+    for (let x = 0; x <= w; x++) {
+      const xPos = x * CELL_SIZE;
+      gridG.moveTo(xPos, 0);
+      gridG.lineTo(xPos, h * CELL_SIZE);
+    }
+  }
+
+  // 단일 픽셀 업데이트
+  function applyPixel(x: number, y: number, c: number) {
+    const g = graphicsRef.current;
+    const info = helloInfoRef.current;
+    const board = boardRef.current;
+    if (!g || !info || !board) return;
+
+    const { w, h } = info;
+    if (x < 0 || y < 0 || x >= w || y >= h) return;
+
+    const i = y * w + x;
+    board[i] = c;
+
+    const color = colorIndexToPixi(c);
+    g.beginFill(color);
+    g.drawRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    g.endFill();
+  }
+
+  const renderWsStatus = () => {
+    switch (wsStatus) {
+      case "connecting":
+        return "WebSocket: 연결 중...";
+      case "open":
+        return "WebSocket: 연결됨 ✅";
+      case "closed":
+        return "WebSocket: 끊어짐 ❌";
+      case "error":
+        return "WebSocket: 에러 ⚠️";
+      default:
+        return "WebSocket: 알 수 없음";
+    }
+  };
+
+  return (
+    /**
+     * 이 div는 기존 전역 header( rplace-web / Home / About ) 아래에 들어갑니다.
+     * h-[calc(100vh-4rem)] 부분에서 4rem은 윗 header 높이 대충 값이니까,
+     * 필요하면 값만 살짝 조정해서 맞춰줘도 됩니다.
+     */
+    <div className="relative h-[calc(100vh-4rem)] w-full bg-zinc-50 font-sans dark:bg-black">
+      {/* 캔버스: header를 제외한 영역을 가득 채움 */}
+      <div className="absolute inset-0">
+        <div
+          ref={pixiContainerRef}
+          className="h-full w-full bg-zinc-100 dark:bg-zinc-900"
+        />
+      </div>
+
+      {/* 좌측 상단 안내 박스들 */}
+      <div className="pointer-events-none absolute left-4 top-4 z-10 flex max-w-xs flex-col gap-2">
+        <div className="pointer-events-auto rounded-2xl border border-zinc-200 bg-zinc-900/90 p-3 text-xs shadow-sm dark:border-zinc-700 dark:bg-zinc-800/90">
+          <p className="text-zinc-100">{renderWsStatus()}</p>
+          {helloInfo && (
+            <p className="mt-1 text-[11px] text-zinc-300">
+              보드 크기: {helloInfo.w} x {helloInfo.h} / 팔레트:{" "}
+              {helloInfo.palette} 색
+            </p>
+          )}
+          <p className="mt-1 text-[11px] text-zinc-300">
+            캔버스를 <strong>짧게 왼쪽 클릭하면 타일이 선택</strong>되고, 왼쪽
+            버튼을 누른 채로 움직이면 <strong>패닝</strong> 할 수 있어요.
+          </p>
+        </div>
+
+        <div className="pointer-events-auto rounded-2xl border border-zinc-200 bg-zinc-900/90 p-3 text-xs shadow-sm dark:border-zinc-700 dark:bg-zinc-800/90">
+          <h3 className="mb-1 font-semibold text-zinc-50">
+            마지막 픽셀 이벤트
+          </h3>
+          {lastPixel ? (
+            <p className="text-[11px] text-zinc-100">
+              (x: {lastPixel.x}, y: {lastPixel.y}, colorIndex: {lastPixel.c})
+            </p>
+          ) : (
+            <p className="text-[11px] text-zinc-300">
+              아직 수신한 픽셀 이벤트가 없습니다.
+            </p>
+          )}
+          <p className="mt-1 text-[11px] text-zinc-300">
+            선택된 타일:{" "}
+            {selectedTile
+              ? `(x: ${selectedTile.x}, y: ${selectedTile.y})`
+              : "없음"}
+          </p>
+          {result && (
+            <p className="mt-1 text-[11px] text-zinc-100">{result}</p>
+          )}
+        </div>
+      </div>
+
+      {/* 우측 상단 색 설정 버튼 + bar */}
+      <div className="pointer-events-none absolute right-4 top-4 z-10">
+        <button
+          onClick={() => setShowColorBar((v) => !v)}
+          className="pointer-events-auto mb-2 rounded-full bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow hover:bg-blue-700"
+        >
+          🎨 색 설정
+        </button>
+
+        {showColorBar && (
+          <div className="pointer-events-auto rounded-2xl border border-zinc-200 bg-zinc-900/95 px-3 py-2 text-xs shadow-lg dark:border-zinc-700">
+            <div className="mb-1 text-[11px] font-medium text-zinc-100">
+              색 선택
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {PALETTE_HEX.map((hex, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedColor(idx)}
+                  className={`h-6 w-6 rounded-full border ${
+                    selectedColor === idx
+                      ? "border-blue-400 ring-2 ring-blue-500"
+                      : "border-zinc-500"
+                  }`}
+                  style={{ backgroundColor: hex }}
+                  title={`색 인덱스 ${idx}`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 하단 중앙 Paint 버튼 (타일 선택 시에만 표시) */}
+      {selectedTile && (
+        <div className="pointer-events-none absolute bottom-4 left-0 right-0 z-10 flex justify-center">
+          <button
+            onClick={paintSelectedTile}
+            disabled={loading}
+            className="pointer-events-auto h-9 w-32 rounded-full bg-blue-600 text-xs font-medium text-white shadow hover:bg-blue-700 disabled:bg-gray-400"
+          >
+            {loading ? "Painting..." : "Paint"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
