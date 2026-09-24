@@ -1,3 +1,4 @@
+import { beginBoxPlacement } from '../interaction/boxPlacement';
 import { useStore } from '../store/store';
 import { BoxIcon, CorrectIcon, RouteIcon } from './icons';
 
@@ -7,7 +8,12 @@ export function Toolbar() {
 
   return (
     <div className="toolbar" role="toolbar" aria-label="도구">
-      <button className="tool-button" data-testid="tool-box" title="Box — Board로 끌어다 놓기">
+      <button
+        className="tool-button"
+        data-testid="tool-box"
+        title="Box — Board로 끌어다 놓기 (클릭하면 화면 중앙에 생성)"
+        onPointerDown={(e) => beginBoxPlacement(e, document.querySelector('[data-testid=board]'))}
+      >
         <BoxIcon />
         <span>Box</span>
       </button>

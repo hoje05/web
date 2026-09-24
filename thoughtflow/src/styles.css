@@ -183,3 +183,119 @@ svg.layer {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
 }
+
+/* ───────────── Box ───────────── */
+
+.box {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: max-content;
+  min-width: 180px;
+  max-width: 300px;
+  min-height: 64px;
+  padding: 11px 14px;
+  background: var(--box-bg);
+  border: 1px solid var(--box-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  pointer-events: auto;
+  transition: border-color 80ms ease, box-shadow 80ms ease;
+}
+
+.box-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+  min-height: 21px;
+  outline: none;
+}
+
+.box-placeholder {
+  color: #b3b7bd;
+}
+
+.box-editor {
+  cursor: text;
+  user-select: text;
+  caret-color: var(--ink);
+}
+
+.box-editor:empty::before {
+  content: '내용 입력';
+  color: #b3b7bd;
+  pointer-events: none;
+}
+
+.box.is-border-hover {
+  border-color: var(--box-border-hover);
+}
+
+.box.is-selected {
+  border-color: var(--selected);
+  box-shadow: 0 0 0 0.5px var(--selected), var(--shadow-md);
+}
+
+.box.is-editing {
+  border-color: var(--selected);
+  box-shadow: 0 0 0 0.5px var(--selected), var(--shadow-md);
+}
+
+.box.is-drop-target {
+  border-color: var(--route-hover);
+  box-shadow: 0 0 0 3px rgba(95, 101, 109, 0.18), var(--shadow-md);
+}
+
+.box-ghost {
+  width: 180px;
+  height: 64px;
+  border-style: dashed;
+  border-color: var(--box-border-hover);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: none;
+}
+
+/* 테두리에서 Route를 끌어낼 수 있다는 표시 — 면 중앙의 작은 점 */
+.box-port {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--route-hover);
+  opacity: 0;
+  transition: opacity 80ms ease;
+  pointer-events: none;
+}
+
+.box.is-border-hover .box-port {
+  opacity: 1;
+}
+
+.port-top { left: 50%; top: 0; }
+.port-bottom { left: 50%; top: 100%; }
+.port-left { left: 0; top: 50%; }
+.port-right { left: 100%; top: 50%; }
+
+.empty-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--muted);
+  font-size: 14px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.empty-hint b {
+  color: #60656d;
+  font-weight: 600;
+}
