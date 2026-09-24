@@ -3,7 +3,6 @@
  * 모든 Route 기능(생성, 반전, 보정, Box 이동 추종, Anchor 분배)이 이 한 가지 파이프라인을 거친다.
  */
 import { computeAnchors } from '../anchors/distribution';
-import { fromChord } from '../geometry/chord';
 import {
   beziersToPathD,
   catmullRomToBeziers,
@@ -13,8 +12,9 @@ import {
   sampleBeziers,
 } from '../geometry/curve';
 import type { Rect } from '../geometry/rect';
-import { dist, type Vec } from '../geometry/vec';
-import type { Doc, RouteEdge } from '../model/types';
+import type { Vec } from '../geometry/vec';
+import type { Doc } from '../model/types';
+import { edgeWorldPoints } from './edgePath';
 
 export interface RouteGeom {
   id: string;
@@ -27,12 +27,6 @@ export interface RouteGeom {
   start: Vec;
   end: Vec;
   bbox: Rect;
-}
-
-/** Route의 world 좌표 점들 [S, ...내부 점, E] */
-export function edgeWorldPoints(edge: RouteEdge, s: Vec, e: Vec): Vec[] {
-  if (edge.pathMode === 'straight' || edge.pathPoints.length === 0 || dist(s, e) < 1) return [s, e];
-  return [s, ...fromChord(edge.pathPoints, s, e), e];
 }
 
 export function buildRouteGeom(id: string, pts: Vec[]): RouteGeom {

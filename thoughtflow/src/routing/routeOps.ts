@@ -10,7 +10,7 @@ import { sub } from '../geometry/vec';
 import { setNodePosition, updateEdge } from '../model/docOps';
 import type { Doc, RouteEdge, Side } from '../model/types';
 import { correctPath } from './correct';
-import { edgeWorldPoints } from './routeGeometry';
+import { edgeWorldPoints } from './edgePath';
 
 /** 방향 반전: source/target과 anchor를 맞바꾸고 경로 점을 역순 변환. 모양은 그대로. */
 export function reverseRoute(doc: Doc, id: string): Doc {
