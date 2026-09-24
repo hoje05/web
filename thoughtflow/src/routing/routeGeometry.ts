@@ -11,9 +11,9 @@ import {
   polylineToPathD,
   sampleBeziers,
 } from '../geometry/curve';
-import type { Rect } from '../geometry/rect';
+import { expandRect, nodeRect, rectContains, type Rect } from '../geometry/rect';
 import type { Vec } from '../geometry/vec';
-import type { Doc } from '../model/types';
+import type { Doc, RouteEdge } from '../model/types';
 import { edgeWorldPoints } from './edgePath';
 
 export interface RouteGeom {
@@ -22,8 +22,9 @@ export interface RouteGeom {
   d: string;
   /** 샘플링된 경로 (hit test, 길이 계산) */
   polyline: Vec[];
-  /** 화살표 위치(경로 길이의 중앙)와 진행 방향(도) */
+  /** 화살표 위치(경로 길이의 중앙 — 다른 Box에 가려지면 가까운 보이는 지점)와 진행 방향(도) */
   arrow: { x: number; y: number; angle: number };
+  length: number;
   start: Vec;
   end: Vec;
   bbox: Rect;
@@ -57,19 +58,65 @@ export function buildRouteGeom(id: string, pts: Vec[]): RouteGeom {
     d,
     polyline,
     arrow: { x: mid.point.x, y: mid.point.y, angle: (mid.angle * 180) / Math.PI },
+    length: total,
     start: pts[0],
     end: pts[pts.length - 1],
     bbox: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
   };
 }
 
+/**
+ * Route 하나의 기하 정보는 (Edge 데이터, 양 끝 Anchor)가 같으면 재사용한다.
+ * → Box를 드래그하는 동안 움직이지 않은 Route는 같은 객체를 유지해 다시 렌더링되지 않는다.
+ */
+const edgeCache = new Map<string, { edge: RouteEdge; key: string; base: RouteGeom; placed: RouteGeom }>();
+
+/** 화살표 후보 위치 (경로 길이 비율): 중앙부터 바깥쪽으로 */
+const ARROW_CANDIDATES = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82];
+
+/**
+ * Route가 다른 Box 밑을 지나가면 중앙의 화살표가 가려져 방향을 알 수 없다.
+ * → 중앙에서 가장 가까운, 어떤 Box에도 가려지지 않는 지점에 화살표를 둔다.
+ */
+function placeArrow(g: RouteGeom, obstacles: Rect[]): RouteGeom['arrow'] {
+  if (obstacles.length === 0) return g.arrow;
+  for (const f of ARROW_CANDIDATES) {
+    const { point, angle } = pointAtLength(g.polyline, g.length * f);
+    if (!obstacles.some((r) => rectContains(r, point))) {
+      return f === 0.5 ? g.arrow : { x: point.x, y: point.y, angle: (angle * 180) / Math.PI };
+    }
+  }
+  return g.arrow;
+}
+
+const overlaps = (a: Rect, b: Rect) =>
+  a.x <= b.x + b.width && b.x <= a.x + a.width && a.y <= b.y + b.height && b.y <= a.y + a.height;
+
 export function computeRouteGeometry(doc: Doc): Map<string, RouteGeom> {
   const anchors = computeAnchors(doc);
+  const rects = Object.values(doc.nodes).map((n) => expandRect(nodeRect(n), 6));
   const out = new Map<string, RouteGeom>();
   for (const edge of Object.values(doc.edges)) {
     const a = anchors.get(edge.id);
     if (!a) continue;
-    out.set(edge.id, buildRouteGeom(edge.id, edgeWorldPoints(edge, a.source, a.target)));
+    const key = `${a.source.x},${a.source.y},${a.target.x},${a.target.y}`;
+    let entry = edgeCache.get(edge.id);
+    if (!entry || entry.edge !== edge || entry.key !== key) {
+      const base = buildRouteGeom(edge.id, edgeWorldPoints(edge, a.source, a.target));
+      entry = { edge, key, base, placed: base };
+      edgeCache.set(edge.id, entry);
+    }
+    const base = entry.base;
+    const arrow = placeArrow(base, rects.filter((r) => overlaps(r, base.bbox)));
+    const prev = entry.placed.arrow;
+    if (arrow.x !== prev.x || arrow.y !== prev.y || arrow.angle !== prev.angle) {
+      entry.placed = arrow === base.arrow ? base : { ...base, arrow };
+    }
+    out.set(edge.id, entry.placed);
+  }
+  // 삭제된 Route의 캐시 정리
+  if (edgeCache.size > out.size * 2 + 64) {
+    for (const id of edgeCache.keys()) if (!doc.edges[id]) edgeCache.delete(id);
   }
   return out;
 }

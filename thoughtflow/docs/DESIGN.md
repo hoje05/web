@@ -112,7 +112,7 @@ Pointer 상태 머신 (`useBoardInteraction`): `idle | panning | movingNode | dr
 
 Hit test 우선순위 (world 좌표, 거리 기준은 화면 px ÷ zoom):
 1. Box 내부 — 테두리에서 9px 이내면 **border**(Route 시작), 아니면 **body**(이동/선택)
-2. Route 화살표 (반경 11px) → 클릭 시 방향 반전
+2. Route 화살표 (반경 8px — 화살표 크기와 비슷하게 해서 선을 선택하려다 반전되는 실수 방지) → 클릭 시 방향 반전
 3. Box 바깥 7px band → **border**
 4. Route 선 (중심선에서 7px, 즉 14px 폭의 보이지 않는 hit area) → Route 선택
 5. 빈 공간
@@ -121,10 +121,10 @@ Hit test 우선순위 (world 좌표, 거리 기준은 화면 px ÷ zoom):
 |---|---|
 | Toolbar `Box`를 Board로 drag & drop | 놓은 위치에 Box 생성 → 바로 텍스트 입력 상태 (클릭만 하면 화면 중앙에 생성) |
 | 빈 곳 더블클릭 | 그 위치에 Box 생성 → 입력 상태 |
-| Box body drag | 이동 (연결된 Route가 실시간으로 따라감) |
-| Box 더블클릭 / 선택 후 Enter | 텍스트 편집 (Enter=줄바꿈, Esc 또는 바깥 클릭=완료) |
+| Box body drag | 이동 (연결된 Route가 실시간으로 따라감, 드래그한 Box는 맨 위로) |
+| Box 더블클릭 / 선택 후 Enter | 텍스트 편집 (Enter=줄바꿈, Esc 또는 바깥 클릭=완료, Tab/Shift+Tab=다음/이전 Box로 이동하며 계속 입력) |
 | Box **테두리** drag | Route가 커서를 따라 그려짐 → 빈 곳에 놓으면 새 Box 생성 + 입력 상태, 다른 Box 위에 놓으면 연결 |
-| `Route` 도구 + 빈 곳 drag | 자유 Route → 양 끝이 빈 곳이면 양쪽에 Box 자동 생성 (끝이 기존 Box면 그 Box에 연결) |
+| `Route` 도구 + 빈 곳 drag | 자유 Route → 양 끝이 빈 곳이면 양쪽에 Box 자동 생성 (끝이 기존 Box면 그 Box에 연결). 흐름상 먼저인 source Box부터 입력 → Tab으로 target |
 | 화살표 클릭 | 방향 반전 |
 | Route 클릭 | Route 선택 → `보정`, Delete 사용 가능 |
 | 빈 곳 drag / 휠 클릭 drag / Space+drag | Pan |
@@ -141,7 +141,7 @@ Hit test 우선순위 (world 좌표, 거리 기준은 화면 px ÷ zoom):
 **확정 시 (자동 정리 — "Route 자동 보정")**
 1. 기존 Box에서 시작/끝나면 Box 내부 구간을 잘라내고 테두리 교차점을 끝점으로 사용 → 교차한 면 = 사용자가 의도한 연결 면.
 2. RDP(ε = 화면 0.6px)로 의미 없는 중복점 제거 (모양 변화 없음).
-3. **직선 판정**: chord에서 최대 이탈이 `max(화면 6px, chord 길이의 4%)` 이하이면 완전한 직선으로 확정. → 대충 끌어도 직선은 깔끔한 직선이 된다.
+3. **직선 판정**: chord에서 최대 이탈이 `max(화면 8px, chord 길이의 6%)` 이하이면 완전한 직선으로 확정. → 대충 끌어도 직선은 깔끔한 직선이 된다.
 4. 나머지 점은 Chord 좌표로 정규화하여 저장(`pathMode: 'freehand'`).
 
 **보정 버튼 (`correct.ts`)** — 입력은 현재 화면에 보이는 world 경로(S … E)
@@ -165,7 +165,9 @@ sourceNode/targetNode/anchor/방향은 건드리지 않고 `pathPoints`와 `path
 | 선택 Box와 무관 | dim | 회색, opacity 0.45 (구조는 계속 보임) |
 | Route 자체가 선택됨 | selected | 진한 회색, 조금 두껍게 |
 
-Glow = 같은 path를 굵게(stroke 8, opacity 0.28) 그리고 `feGaussianBlur(σ=2.5)`를 적용한 underlay. 강조된 Route는 마지막에 그려서 다른 선에 가려지지 않게 한다.
+Glow = 같은 path를 굵게(stroke 7, opacity 0.3) 그리고 `feGaussianBlur(σ=2.5)`를 적용한 underlay. filter 영역은 Route bbox 기준 `userSpaceOnUse`로 지정한다(기본 objectBoundingBox 단위는 완전한 수평/수직선에서 높이가 0이 되어 glow가 사라진다). 강조된 Route는 마지막에 그려서 다른 선에 가려지지 않게 한다.
+
+**화살표 위치**: 경로 길이의 중앙. 단, Route가 다른 Box 밑을 지나 중앙이 가려지면 중앙에서 가장 가까운 보이는 지점(0.42, 0.58, 0.34 …)으로 옮겨 방향이 항상 보이게 한다.
 
 ## 8. Anchor Distribution
 
@@ -188,13 +190,20 @@ Glow = 같은 path를 굵게(stroke 8, opacity 0.28) 그리고 `feGaussianBlur(�
 | 곡선 Route가 Box 이동 시 뒤틀림 / chord 길이 0 | Chord 닮음 변환, chord < 1px이면 직선으로 fallback |
 | 드래그 중 Anchor 면이 계속 바뀌는 깜빡임 | hysteresis |
 | 보정이 의도한 곡선까지 펴버림 / 흔들림을 못 없앰 | σ·ε를 경로 길이에 비례(상·하한 포함) → 줌과 무관하게 같은 결과, 단위 테스트로 검증 |
-| Route가 많을 때 성능 | 기하 계산 memo, hit test에 bbox 사전 필터, 강조 Route만 blur filter 사용 |
+| Route가 많을 때 성능 | Doc 단위 기하 계산 memo + Route별 캐시(Edge 데이터와 양 끝 Anchor가 같으면 같은 객체 재사용 → 드래그 중 움직이지 않은 Route는 다시 렌더링되지 않음), hit test에 bbox 사전 필터, 강조 Route만 blur filter 사용 |
 | Windows 휠 클릭 autoscroll, Ctrl+휠 페이지 확대, pinch zoom | mousedown(button 1) preventDefault, wheel listener `passive:false`, `setVisualZoomLevelLimits(1,1)` |
 | 드래그 1회가 Undo 수십 개로 쪼개짐 | 드래그 시작 시 snapshot 보관 → 종료 시 한 번만 history push |
 | 저장 안 된 변경 손실 | 창 닫기/새로 만들기/열기 전에 저장 확인 대화상자 |
 | 잘못된/손상된 파일 | 로드 시 스키마 검증, 존재하지 않는 Box를 가리키는 Route 제거 |
 
+| 툴바 버튼이 키보드 포커스를 가져가 Space/Enter 단축키와 충돌 | 툴바/줌 버튼은 mousedown에서 포커스를 받지 않음 |
+| 한글 입력 모드에서 Ctrl+Z 등 단축키 인식 실패 | 문자 키는 `e.key` 대신 물리 키 `e.code`로 판정 |
+
 ## 10. 개발 단계
 
 Phase 1 기본 구조 · Infinite Board · Zoom/Pan → 2 Box → 3 Box↔Box Route · 화살표 · 반전 → 4 테두리 drag로 새 Box → 5 빈 Board에서 Route + 양끝 Box → 6 Freehand · Sampling → 7 단순화 · Smoothing · 보정 → 8 Box 이동 시 곡선 유지 → 9 Anchor Distribution → 10 Highlight · Glow → 11 Undo/Redo → 12 저장/불러오기 → 13 다듬기.
 각 Phase 종료 시 `typecheck + 단위 테스트 + Playwright 시나리오`를 통과한 상태로 commit 한다.
+
+### 구현 결과 메모
+- 모든 Phase를 순서대로 구현했고, 각 단계마다 `typecheck + vitest + Electron e2e` 통과 후 commit 했다.
+- Windows 설치 파일은 Windows에서 `npm run dist`로 만든다. (Linux에서는 NSIS 단계에 wine이 필요해, 개발 환경에서는 `win-unpacked` 앱 폴더 생성까지 확인)

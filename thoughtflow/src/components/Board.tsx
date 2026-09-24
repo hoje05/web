@@ -72,11 +72,6 @@ export function Board() {
       data-testid="board"
     >
       <svg className="layer layer-edges">
-        <defs>
-          <filter id="route-glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="2.5" />
-          </filter>
-        </defs>
         <g transform={svgTransform}>
           {routes.map(({ edge, geom, role }) => (
             <RouteView

@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from 'react';
 import { dist, type Vec } from '../geometry/vec';
+import { bringToFront } from '../model/docOps';
 import type { Doc } from '../model/types';
 import { moveNode } from '../routing/routeOps';
 import { appendSample } from '../routing/sampling';
@@ -168,11 +169,13 @@ export function useBoardInteraction(boardRef: RefObject<HTMLDivElement | null>) 
 
       if (gesture.kind === 'movingNode') {
         if (!gesture.moved && dist(screen, gesture.startScreen) < DRAG_THRESHOLD) return;
+        const first = !gesture.moved;
         gesture.moved = true;
         const p = worldPoint(e);
         const x = Math.round(gesture.origin.x + (p.x - gesture.startWorld.x));
         const y = Math.round(gesture.origin.y + (p.y - gesture.startWorld.y));
-        s.setDocLive(moveNode(s.doc, gesture.nodeId, x, y));
+        const base = first ? bringToFront(s.doc, gesture.nodeId) : s.doc;
+        s.setDocLive(moveNode(base, gesture.nodeId, x, y));
         return;
       }
 
@@ -260,7 +263,9 @@ export function useBoardInteraction(boardRef: RefObject<HTMLDivElement | null>) 
       e.preventDefault();
       // deltaMode 1(line) 인 마우스 휠도 비슷한 속도가 되도록 보정
       const delta = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
-      const factor = Math.exp(-delta * 0.0015);
+      // 트랙패드 pinch는 ctrlKey + 작은 delta로 들어온다 → 더 민감하게
+      const pinch = e.ctrlKey && Math.abs(delta) < 50;
+      const factor = Math.exp(-Math.max(-150, Math.min(150, delta)) * (pinch ? 0.01 : 0.0015));
       useStore.getState().zoomBy(factor, localPoint(e));
     };
 

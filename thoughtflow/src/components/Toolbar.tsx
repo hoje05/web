@@ -15,7 +15,8 @@ export function Toolbar() {
   const correctEdge = useStore((s) => s.correctEdge);
 
   return (
-    <div className="toolbar" role="toolbar" aria-label="도구">
+    // 버튼이 키보드 포커스를 가져가면 Space(Pan)/Enter(편집) 단축키와 충돌하므로 포커스를 주지 않는다
+    <div className="toolbar" role="toolbar" aria-label="도구" onMouseDown={(e) => e.preventDefault()}>
       <button
         className="tool-button"
         data-testid="tool-box"

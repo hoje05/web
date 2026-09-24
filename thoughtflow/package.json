@@ -3,6 +3,7 @@
   "productName": "ThoughtFlow",
   "version": "0.1.0",
   "description": "Box와 Route로 사고의 흐름을 기록하는 데스크톱 앱",
+  "author": "hoje05",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
@@ -15,11 +16,6 @@
     "dist:dir": "npm run build && electron-builder --dir",
     "e2e": "npm run build && node e2e/run-all.mjs"
   },
-  "dependencies": {
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "zustand": "^5.0.15"
-  },
   "devDependencies": {
     "@types/node": "^22.20.4",
     "@types/react": "^19.3.0",
@@ -28,8 +24,51 @@
     "electron": "^44.4.5",
     "electron-builder": "^26.15.3",
     "playwright-core": "^1.56.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.6",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "zustand": "^5.0.15"
+  },
+  "build": {
+    "appId": "com.thoughtflow.app",
+    "productName": "ThoughtFlow",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "tflow",
+        "name": "ThoughtFlow Board",
+        "description": "ThoughtFlow 보드",
+        "role": "Editor"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "ThoughtFlow",
+      "artifactName": "ThoughtFlow-Setup-${version}.${ext}"
+    },
+    "publish": null
   }
 }

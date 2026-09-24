@@ -25,6 +25,17 @@ export function updateNode(doc: Doc, id: string, patch: Partial<Omit<BoxNode, 'i
   return { ...doc, nodes: { ...doc.nodes, [id]: { ...node, ...patch } } };
 }
 
+/** 겹쳤을 때 위에 보이도록 맨 뒤(= 맨 위)로 옮긴다 */
+export function bringToFront(doc: Doc, id: string): Doc {
+  const node = doc.nodes[id];
+  const keys = Object.keys(doc.nodes);
+  if (!node || keys[keys.length - 1] === id) return doc;
+  const nodes = { ...doc.nodes };
+  delete nodes[id];
+  nodes[id] = node;
+  return { ...doc, nodes };
+}
+
 export function setNodePosition(doc: Doc, id: string, x: number, y: number): Doc {
   const node = doc.nodes[id];
   if (!node || (node.x === x && node.y === y)) return doc;
