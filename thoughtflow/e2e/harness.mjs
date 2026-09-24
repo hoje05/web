@@ -4,8 +4,8 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 
-export async function launch() {
-  const app = await electron.launch({ executablePath: require('electron'), args: ['--no-sandbox', '.'] });
+export async function launch(extraArgs = []) {
+  const app = await electron.launch({ executablePath: require('electron'), args: ['--no-sandbox', '.', ...extraArgs] });
   const win = await app.firstWindow();
   await win.setViewportSize?.({ width: 1280, height: 800 }).catch(() => {});
   await win.waitForSelector('[data-testid=board]');
@@ -23,6 +23,8 @@ export const state = (win) =>
       tool: s.tool,
       past: s.past.length,
       future: s.future.length,
+      dirty: s.doc !== s.savedDoc,
+      filePath: s.filePath,
     };
   });
 
@@ -46,4 +48,12 @@ export async function toScreen(win, p) {
 export function assert(cond, msg) {
   if (!cond) throw new Error('ASSERT: ' + msg);
   console.log('  ✓ ' + msg);
+}
+
+/** 테스트 종료: "저장하지 않은 변경" 확인 대화상자에 '저장 안 함'으로 답하고 닫는다 */
+export async function shutdown(app) {
+  await app.evaluate(({ dialog }) => {
+    dialog.showMessageBoxSync = () => 1;
+  }).catch(() => {});
+  await app.close().catch(() => {});
 }

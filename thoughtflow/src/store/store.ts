@@ -3,7 +3,8 @@ import type { Vec } from '../geometry/vec';
 import { addNode, makeNode, removeEdge, removeNode, setNodeText, updateNode } from '../model/docOps';
 import { newId } from '../model/ids';
 import { EMPTY_DOC, type Doc, type Selection, type Tool, type Viewport } from '../model/types';
-import { screenToWorld, zoomAt } from '../viewport/viewport';
+import { getRouteGeometry } from '../routing/routeGeometry';
+import { fitBounds, screenToWorld, zoomAt } from '../viewport/viewport';
 import type { Hit } from '../interaction/hitTest';
 import { createRoute, type RouteDraft } from '../routing/createRoute';
 import { correctRoute, reverseRoute } from '../routing/routeOps';
@@ -11,6 +12,9 @@ import { pushPast, type History } from './history';
 
 export interface AppState extends History {
   doc: Doc;
+  /** 마지막으로 저장(또는 연) 시점의 Doc. doc !== savedDoc 이면 저장되지 않은 변경이 있다. */
+  savedDoc: Doc;
+  filePath: string | null;
   viewport: Viewport;
   boardSize: { width: number; height: number };
   selection: Selection;
@@ -32,6 +36,13 @@ export interface AppState extends History {
   commitFrom: (before: Doc) => void;
   /** Undo 기록 없이 Doc 변경 (드래그 중간 단계, 크기 측정) */
   setDocLive: (doc: Doc) => void;
+  undo: () => void;
+  redo: () => void;
+
+  // ── 파일 ──
+  resetBoard: () => void;
+  loadBoard: (doc: Doc, viewport: Viewport | null, filePath: string) => void;
+  markSaved: (filePath: string, doc: Doc) => void;
 
   // ── 편의 action ──
   addBoxAt: (worldCenter: Vec) => string;
@@ -52,6 +63,8 @@ export interface AppState extends History {
 
   setViewport: (v: Viewport) => void;
   zoomBy: (factor: number, anchor?: Vec) => void;
+  /** 모든 Box와 Route가 화면에 들어오도록 */
+  fitView: () => void;
   setBoardSize: (size: { width: number; height: number }) => void;
   setTool: (tool: Tool) => void;
   setSpaceHeld: (held: boolean) => void;
@@ -59,6 +72,8 @@ export interface AppState extends History {
 
 export const useStore = create<AppState>()((set, get) => ({
   doc: EMPTY_DOC,
+  savedDoc: EMPTY_DOC,
+  filePath: null,
   past: [],
   future: [],
   viewport: { zoom: 1, panX: 0, panY: 0 },
@@ -76,6 +91,65 @@ export const useStore = create<AppState>()((set, get) => ({
   commitFrom: (before) => set((s) => (before === s.doc ? {} : { past: pushPast(s.past, before), future: [] })),
   setDocLive: (doc) => set({ doc }),
 
+  undo: () =>
+    set((s) => {
+      if (!s.past.length) return {};
+      const prev = s.past[s.past.length - 1];
+      return {
+        doc: prev,
+        past: s.past.slice(0, -1),
+        future: [s.doc, ...s.future],
+        selection: validSelection(s.selection, prev),
+        editingNodeId: null,
+        draft: null,
+      };
+    }),
+  redo: () =>
+    set((s) => {
+      if (!s.future.length) return {};
+      const next = s.future[0];
+      return {
+        doc: next,
+        past: pushPast(s.past, s.doc),
+        future: s.future.slice(1),
+        selection: validSelection(s.selection, next),
+        editingNodeId: null,
+        draft: null,
+      };
+    }),
+
+  resetBoard: () => {
+    const { boardSize } = get();
+    set({
+      doc: EMPTY_DOC,
+      savedDoc: EMPTY_DOC,
+      filePath: null,
+      past: [],
+      future: [],
+      selection: null,
+      editingNodeId: null,
+      draft: null,
+      tool: 'select',
+      viewport: { zoom: 1, panX: boardSize.width / 2, panY: boardSize.height / 2 },
+    });
+  },
+  loadBoard: (doc, viewport, filePath) => {
+    set({
+      doc,
+      savedDoc: doc,
+      filePath,
+      past: [],
+      future: [],
+      selection: null,
+      editingNodeId: null,
+      draft: null,
+      tool: 'select',
+    });
+    if (viewport) set({ viewport });
+    else get().fitView();
+  },
+  markSaved: (filePath, doc) => set({ filePath, savedDoc: doc }),
+
   addBoxAt: (center) => {
     const id = newId('n');
     const { doc, commit } = get();
@@ -92,7 +166,11 @@ export const useStore = create<AppState>()((set, get) => ({
   setNodeSize: (id, width, height) => {
     const node = get().doc.nodes[id];
     if (!node || (Math.abs(node.width - width) < 0.5 && Math.abs(node.height - height) < 0.5)) return;
-    set((s) => ({ doc: updateNode(s.doc, id, { width, height }) }));
+    set((s) => {
+      const doc = updateNode(s.doc, id, { width, height });
+      // 측정값 갱신은 사용자 변경이 아니므로 "저장 안 됨" 상태를 만들지 않는다
+      return { doc, savedDoc: s.doc === s.savedDoc ? doc : s.savedDoc };
+    });
   },
 
   deleteSelection: () => {
@@ -142,6 +220,24 @@ export const useStore = create<AppState>()((set, get) => ({
     const a = anchor ?? { x: boardSize.width / 2, y: boardSize.height / 2 };
     set({ viewport: zoomAt(viewport, a, factor) });
   },
+  fitView: () => {
+    const { doc, boardSize } = get();
+    const nodes = Object.values(doc.nodes);
+    if (nodes.length === 0) {
+      set({ viewport: { zoom: 1, panX: boardSize.width / 2, panY: boardSize.height / 2 } });
+      return;
+    }
+    const b = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    const include = (x: number, y: number, w: number, h: number) => {
+      b.minX = Math.min(b.minX, x);
+      b.minY = Math.min(b.minY, y);
+      b.maxX = Math.max(b.maxX, x + w);
+      b.maxY = Math.max(b.maxY, y + h);
+    };
+    for (const n of nodes) include(n.x, n.y, n.width, n.height);
+    for (const g of getRouteGeometry(doc).values()) include(g.bbox.x, g.bbox.y, g.bbox.width, g.bbox.height);
+    set({ viewport: fitBounds(b, boardSize) });
+  },
   setBoardSize: (boardSize) =>
     set((s) => {
       // 처음 크기가 정해질 때 world 원점을 화면 중앙에 둔다
@@ -158,6 +254,12 @@ export const useStore = create<AppState>()((set, get) => ({
 export function viewportCenterWorld(): Vec {
   const { viewport, boardSize } = useStore.getState();
   return screenToWorld(viewport, { x: boardSize.width / 2, y: boardSize.height / 2 });
+}
+
+function validSelection(sel: Selection, doc: Doc): Selection {
+  if (!sel) return null;
+  if (sel.kind === 'node') return doc.nodes[sel.id] ? sel : null;
+  return doc.edges[sel.id] ? sel : null;
 }
 
 function sameHit(a: Hit, b: Hit): boolean {

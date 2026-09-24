@@ -1,4 +1,4 @@
-import { launch, state, drag, assert, toScreen } from './harness.mjs';
+import { launch, state, drag, assert, toScreen, shutdown } from './harness.mjs';
 
 const { app, win } = await launch();
 try {
@@ -66,5 +66,5 @@ try {
   await win.screenshot({ path: 'e2e/out/phase2.png' });
   console.log('PHASE 2 OK');
 } finally {
-  await app.close();
+  await shutdown(app);
 }

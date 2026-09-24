@@ -1,4 +1,4 @@
-import { launch, state, drag, assert, toScreen } from './harness.mjs';
+import { launch, state, drag, assert, toScreen, shutdown } from './harness.mjs';
 
 const { app, win } = await launch();
 const pointOnRoute = (id, frac) =>
@@ -99,5 +99,5 @@ try {
   await win.screenshot({ path: 'e2e/out/phase8-moved.png' });
   console.log('PHASE 6-8 OK');
 } finally {
-  await app.close();
+  await shutdown(app);
 }

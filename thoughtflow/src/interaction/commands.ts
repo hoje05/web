@@ -1,0 +1,53 @@
+/**
+ * 단축키와 메뉴가 공유하는 명령.
+ */
+import { newBoard, openBoard, saveAndClose, saveBoard } from '../persistence/fileService';
+import { useStore } from '../store/store';
+import { flushEditing } from './editing';
+
+export type Command =
+  | 'new'
+  | 'open'
+  | 'save'
+  | 'saveAs'
+  | 'saveAndClose'
+  | 'undo'
+  | 'redo'
+  | 'delete'
+  | 'zoomIn'
+  | 'zoomOut'
+  | 'zoomReset'
+  | 'zoomFit';
+
+export function runCommand(command: string) {
+  const s = useStore.getState();
+  switch (command as Command) {
+    case 'new':
+      return void newBoard();
+    case 'open':
+      return void openBoard();
+    case 'save':
+      return void saveBoard();
+    case 'saveAs':
+      return void saveBoard(true);
+    case 'saveAndClose':
+      return void saveAndClose();
+    case 'undo':
+      flushEditing();
+      return useStore.getState().undo();
+    case 'redo':
+      flushEditing();
+      return useStore.getState().redo();
+    case 'delete':
+      if (s.editingNodeId) return;
+      return s.deleteSelection();
+    case 'zoomIn':
+      return s.zoomBy(1.2);
+    case 'zoomOut':
+      return s.zoomBy(1 / 1.2);
+    case 'zoomReset':
+      return s.zoomBy(1 / s.viewport.zoom);
+    case 'zoomFit':
+      return s.fitView();
+  }
+}

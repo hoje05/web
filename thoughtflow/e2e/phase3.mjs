@@ -1,4 +1,4 @@
-import { launch, state, drag, assert, toScreen } from './harness.mjs';
+import { launch, state, drag, assert, toScreen, shutdown } from './harness.mjs';
 
 const { app, win } = await launch();
 const nodeCenter = async (n) => toScreen(win, { x: n.x + n.width / 2, y: n.y + n.height / 2 });
@@ -116,5 +116,5 @@ try {
   assert(!Object.values(s.doc.edges).some((e) => e.sourceNodeId === A.id || e.targetNodeId === A.id), 'deleting box removes its routes');
   console.log('PHASE 3-5 OK');
 } finally {
-  await app.close();
+  await shutdown(app);
 }

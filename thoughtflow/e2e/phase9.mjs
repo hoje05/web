@@ -1,4 +1,4 @@
-import { launch, state, drag, assert, toScreen } from './harness.mjs';
+import { launch, state, drag, assert, toScreen, shutdown } from './harness.mjs';
 
 const { app, win } = await launch();
 const box = async (x, y, text) => {
@@ -88,5 +88,5 @@ try {
   assert((await routeStyle(eBC.id)).stroke === purple, 'same route is incoming (purple) from C’s point of view');
   console.log('PHASE 9-10 OK');
 } finally {
-  await app.close();
+  await shutdown(app);
 }
