@@ -6,12 +6,14 @@
  *    정확히 그 지점에 오도록 배치되어, Route 끝이 사용자가 놓은 위치에서 어긋나지 않는다.
  */
 import { oppositeSide, placeBoxBySide, sideForDirection, straightSides } from '../anchors/sideSelection';
-import { polylineLength } from '../geometry/curve';
+import { toChord } from '../geometry/chord';
+import { headingPoint, polylineLength } from '../geometry/curve';
 import { nearestSide, nodeRect, rectContains, segmentRectExit, type Rect } from '../geometry/rect';
 import { sub, type Vec } from '../geometry/vec';
 import { addEdge, addNode } from '../model/docOps';
 import { newId } from '../model/ids';
 import { DEFAULT_BOX_HEIGHT, DEFAULT_BOX_WIDTH, type Doc, type RouteEdge, type Side } from '../model/types';
+import { cleanDrawnPath } from './correct';
 
 export interface RouteDraft {
   /** 기존 Box에서 시작했으면 그 id, 빈 곳에서 시작했으면 null */
@@ -60,14 +62,21 @@ export function createRoute(doc: Doc, draft: RouteDraft, targetNodeId: string | 
   if (!pts || pts.length < 2) return null;
   if (polylineLength(pts) * zoom < MIN_ROUTE_SCREEN_LENGTH) return null;
 
+  // 2) 자동 정리: 중복점 제거, 거의 곧은 선은 완전한 직선으로
+  const cleaned = cleanDrawnPath(pts, zoom);
+  pts = cleaned.points;
+  const straight = cleaned.straight;
+
   const startPt = pts[0];
   const endPt = pts[pts.length - 1];
-  const dir = sub(endPt, startPt);
+  // 새 Box를 어느 방향으로 펼칠지: 직선은 전체 방향, 곡선은 양 끝의 진행 방향
+  const headOut = straight ? sub(endPt, startPt) : sub(headingPoint(pts, false, 20), startPt);
+  const headIn = straight ? sub(endPt, startPt) : sub(endPt, headingPoint(pts, true, 20));
 
   let next = doc;
   const created: string[] = [];
 
-  // 2) 시작 쪽 Box
+  // 3) 시작 쪽 Box
   let srcId: string;
   let srcSide: Side;
   if (source) {
@@ -75,13 +84,13 @@ export function createRoute(doc: Doc, draft: RouteDraft, targetNodeId: string | 
     srcSide = nearestSide(nodeRect(source), startPt);
   } else {
     srcId = newId('n');
-    srcSide = sideForDirection(dir);
+    srcSide = sideForDirection(headOut);
     const pos = placeBoxBySide(startPt, srcSide, DEFAULT_BOX_WIDTH, DEFAULT_BOX_HEIGHT);
     next = addNode(next, { id: srcId, ...roundPos(pos), width: DEFAULT_BOX_WIDTH, height: DEFAULT_BOX_HEIGHT, text: '' });
     created.push(srcId);
   }
 
-  // 3) 끝 쪽 Box
+  // 4) 끝 쪽 Box
   let tgtId: string;
   let tgtSide: Side;
   if (target) {
@@ -89,16 +98,19 @@ export function createRoute(doc: Doc, draft: RouteDraft, targetNodeId: string | 
     tgtSide = nearestSide(nodeRect(target), endPt);
   } else {
     tgtId = newId('n');
-    tgtSide = oppositeSide(sideForDirection(dir));
+    tgtSide = oppositeSide(sideForDirection(headIn));
     const pos = placeBoxBySide(endPt, tgtSide, DEFAULT_BOX_WIDTH, DEFAULT_BOX_HEIGHT);
     next = addNode(next, { id: tgtId, ...roundPos(pos), width: DEFAULT_BOX_WIDTH, height: DEFAULT_BOX_HEIGHT, text: '' });
     created.push(tgtId);
   }
 
-  // 4) 직선: 기존 Box 쪽 면은 두 Box의 상대 위치로 다듬는다 (그은 면을 우선하는 hysteresis)
-  const [s2, t2] = straightSides(nodeRect(next.nodes[srcId]), nodeRect(next.nodes[tgtId]), [srcSide, tgtSide]);
-  if (source) srcSide = s2;
-  if (target) tgtSide = t2;
+  // 5) 직선: 기존 Box 쪽 면은 두 Box의 상대 위치로 다듬는다 (그은 면을 우선하는 hysteresis).
+  //    곡선: 경로가 실제로 통과한 면 = 사용자의 의도이므로 그대로 둔다.
+  if (straight) {
+    const [s2, t2] = straightSides(nodeRect(next.nodes[srcId]), nodeRect(next.nodes[tgtId]), [srcSide, tgtSide]);
+    if (source) srcSide = s2;
+    if (target) tgtSide = t2;
+  }
 
   const edge: RouteEdge = {
     id: newId('e'),
@@ -106,8 +118,9 @@ export function createRoute(doc: Doc, draft: RouteDraft, targetNodeId: string | 
     targetNodeId: tgtId,
     sourceAnchor: { side: srcSide },
     targetAnchor: { side: tgtSide },
-    pathPoints: [],
-    pathMode: 'straight',
+    // 곡선 내부 점은 "그린 경로의 양 끝"을 기준으로 정규화 → 실제 Anchor에 닮음 변환되어 그대로 표시된다
+    pathPoints: straight ? [] : toChord(pts.slice(1, -1), startPt, endPt),
+    pathMode: straight ? 'straight' : 'freehand',
   };
   next = addEdge(next, edge);
 

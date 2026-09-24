@@ -9,8 +9,8 @@ export const HIT = {
   borderInner: 9,
   /** Box 바깥 테두리 band */
   borderOuter: 7,
-  /** 화살표 클릭 반경 */
-  arrow: 11,
+  /** 화살표 클릭 반경 — 화살표 크기와 비슷하게 (선 가운데를 눌러 선택하려다 반전되는 실수 방지) */
+  arrow: 8,
   /** Route 선의 보이지 않는 hit area 반폭 (전체 폭 14px) */
   edge: 7,
 } as const;
@@ -47,7 +47,7 @@ export function hitTest(doc: Doc, p: Vec, zoom: number): Hit {
   const geoms = getRouteGeometry(doc);
 
   // 2) 화살표
-  const arrowR = Math.max(HIT.arrow / zoom, 8);
+  const arrowR = Math.max(HIT.arrow / zoom, 6);
   let best: { id: string; d: number } | null = null;
   for (const g of geoms.values()) {
     const d = dist(p, g.arrow);

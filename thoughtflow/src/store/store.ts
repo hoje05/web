@@ -6,7 +6,7 @@ import { EMPTY_DOC, type Doc, type Selection, type Tool, type Viewport } from '.
 import { screenToWorld, zoomAt } from '../viewport/viewport';
 import type { Hit } from '../interaction/hitTest';
 import { createRoute, type RouteDraft } from '../routing/createRoute';
-import { reverseRoute } from '../routing/routeOps';
+import { correctRoute, reverseRoute } from '../routing/routeOps';
 import { pushPast, type History } from './history';
 
 export interface AppState extends History {
@@ -39,6 +39,7 @@ export interface AppState extends History {
   setNodeSize: (id: string, width: number, height: number) => void;
   deleteSelection: () => void;
   reverseEdge: (id: string) => void;
+  correctEdge: (id: string) => void;
   /** 그린 경로로 Route(필요하면 새 Box까지) 생성. 성공하면 true */
   finishRoute: (draft: RouteDraft, targetNodeId: string | null) => boolean;
   setDraft: (draft: AppState['draft']) => void;
@@ -104,6 +105,11 @@ export const useStore = create<AppState>()((set, get) => ({
   reverseEdge: (id) => {
     const { doc, commit } = get();
     commit(reverseRoute(doc, id));
+  },
+
+  correctEdge: (id) => {
+    const { doc, commit } = get();
+    commit(correctRoute(doc, id));
   },
 
   finishRoute: (draft, targetNodeId) => {
