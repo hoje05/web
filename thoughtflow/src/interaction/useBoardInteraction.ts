@@ -1,14 +1,17 @@
 import { useEffect, type RefObject } from 'react';
 import { dist, type Vec } from '../geometry/vec';
-import { setNodePosition } from '../model/docOps';
 import type { Doc } from '../model/types';
+import { moveNode } from '../routing/routeOps';
+import { appendSample } from '../routing/sampling';
 import { useStore } from '../store/store';
 import { screenToWorld } from '../viewport/viewport';
 import { flushEditing } from './editing';
-import { hitTest, type Hit } from './hitTest';
+import { hitTest, nodeAt, type Hit } from './hitTest';
 
 /** 이 거리(화면 px) 이상 움직여야 클릭이 아니라 드래그로 본다 */
 const DRAG_THRESHOLD = 3;
+/** Route 경로 샘플 간격 (화면 px) */
+const SAMPLE_SPACING = 3;
 
 type Gesture =
   | { kind: 'idle' }
@@ -22,7 +25,16 @@ type Gesture =
       origin: Vec;
       startDoc: Doc;
       moved: boolean;
-    };
+    }
+  | {
+      kind: 'drawingRoute';
+      pointerId: number;
+      sourceNodeId: string | null;
+      points: Vec[];
+      startScreen: Vec;
+      moved: boolean;
+    }
+  | { kind: 'pressArrow'; pointerId: number; edgeId: string; startScreen: Vec; startPan: Vec };
 
 /**
  * Board의 pointer 상태 머신.
@@ -75,8 +87,39 @@ export function useBoardInteraction(boardRef: RefObject<HTMLDivElement | null>) 
 
       const p = worldPoint(e);
       const hit = hitTest(s.doc, p, s.viewport.zoom);
+      const onNode = hit.kind === 'node-body' || hit.kind === 'node-border' ? hit.nodeId : null;
 
-      if (hit.kind === 'node-body' || hit.kind === 'node-border') {
+      // Route 그리기: Route 도구(어디서든) 또는 Box 테두리에서 드래그
+      if (s.tool === 'route' || hit.kind === 'node-border') {
+        gesture = {
+          kind: 'drawingRoute',
+          pointerId: e.pointerId,
+          sourceNodeId: onNode,
+          points: [p],
+          startScreen: localPoint(e),
+          moved: false,
+        };
+        return;
+      }
+
+      if (hit.kind === 'arrow') {
+        gesture = {
+          kind: 'pressArrow',
+          pointerId: e.pointerId,
+          edgeId: hit.edgeId,
+          startScreen: localPoint(e),
+          startPan: { x: s.viewport.panX, y: s.viewport.panY },
+        };
+        return;
+      }
+
+      if (hit.kind === 'edge') {
+        s.select({ kind: 'edge', id: hit.edgeId });
+        startPan(e, false);
+        return;
+      }
+
+      if (hit.kind === 'node-body') {
         const node = s.doc.nodes[hit.nodeId];
         s.select({ kind: 'node', id: node.id });
         gesture = {
@@ -129,7 +172,38 @@ export function useBoardInteraction(boardRef: RefObject<HTMLDivElement | null>) 
         const p = worldPoint(e);
         const x = Math.round(gesture.origin.x + (p.x - gesture.startWorld.x));
         const y = Math.round(gesture.origin.y + (p.y - gesture.startWorld.y));
-        s.setDocLive(setNodePosition(s.doc, gesture.nodeId, x, y));
+        s.setDocLive(moveNode(s.doc, gesture.nodeId, x, y));
+        return;
+      }
+
+      if (gesture.kind === 'pressArrow') {
+        // 화살표를 누른 채 끌면 클릭이 아니라 Pan으로 전환
+        if (dist(screen, gesture.startScreen) < DRAG_THRESHOLD) return;
+        gesture = {
+          kind: 'panning',
+          pointerId: gesture.pointerId,
+          startScreen: gesture.startScreen,
+          startPan: gesture.startPan,
+          moved: false,
+          clearOnClick: false,
+        };
+        onPointerMove(e);
+        return;
+      }
+
+      if (gesture.kind === 'drawingRoute') {
+        // 빠른 마우스 이동도 놓치지 않도록 coalesced event까지 샘플링
+        const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
+        const minDist = SAMPLE_SPACING / s.viewport.zoom;
+        for (const ev of events.length ? events : [e]) appendSample(gesture.points, worldPoint(ev), minDist);
+        if (!gesture.moved && dist(screen, gesture.startScreen) < DRAG_THRESHOLD) return;
+        gesture.moved = true;
+        const last = gesture.points[gesture.points.length - 1];
+        s.setDraft({
+          sourceNodeId: gesture.sourceNodeId,
+          points: gesture.points.slice(),
+          targetNodeId: nodeAt(s.doc, last, s.viewport.zoom, gesture.sourceNodeId),
+        });
       }
     };
 
@@ -139,11 +213,32 @@ export function useBoardInteraction(boardRef: RefObject<HTMLDivElement | null>) 
       gesture = { kind: 'idle' };
       board.classList.remove('is-panning');
       const s = useStore.getState();
+      if (e.type === 'pointercancel') {
+        s.setDraft(null);
+        if (g.kind === 'movingNode' && g.moved) s.commitFrom(g.startDoc);
+        return;
+      }
 
       if (g.kind === 'panning') {
         if (!g.moved && g.clearOnClick) s.select(null);
       } else if (g.kind === 'movingNode') {
         if (g.moved) s.commitFrom(g.startDoc);
+      } else if (g.kind === 'pressArrow') {
+        s.reverseEdge(g.edgeId);
+        s.select({ kind: 'edge', id: g.edgeId });
+      } else if (g.kind === 'drawingRoute') {
+        s.setDraft(null);
+        const release = worldPoint(e);
+        if (!g.moved) {
+          // 그냥 클릭: Box면 선택, 빈 곳이면 선택 해제
+          s.select(g.sourceNodeId ? { kind: 'node', id: g.sourceNodeId } : null);
+          return;
+        }
+        g.points.push(release);
+        const target = nodeAt(s.doc, release, s.viewport.zoom, g.sourceNodeId);
+        if (!s.finishRoute({ sourceNodeId: g.sourceNodeId, points: g.points }, target) && g.sourceNodeId) {
+          s.select({ kind: 'node', id: g.sourceNodeId });
+        }
       }
     };
 

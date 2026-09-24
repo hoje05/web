@@ -5,6 +5,8 @@ import { newId } from '../model/ids';
 import { EMPTY_DOC, type Doc, type Selection, type Tool, type Viewport } from '../model/types';
 import { screenToWorld, zoomAt } from '../viewport/viewport';
 import type { Hit } from '../interaction/hitTest';
+import { createRoute, type RouteDraft } from '../routing/createRoute';
+import { reverseRoute } from '../routing/routeOps';
 import { pushPast, type History } from './history';
 
 export interface AppState extends History {
@@ -20,6 +22,8 @@ export interface AppState extends History {
   ghost: Vec | null;
   /** 마우스 아래에 있는 대상 (커서/hover 표시용) */
   hover: Hit;
+  /** 그리는 중인 Route (world 좌표) + 놓으면 연결될 Box */
+  draft: (RouteDraft & { targetNodeId: string | null }) | null;
 
   // ── Doc 변경 (history) ──
   /** 새 Doc을 적용하고 이전 Doc을 Undo 기록에 넣는다 */
@@ -34,6 +38,10 @@ export interface AppState extends History {
   setText: (id: string, text: string) => void;
   setNodeSize: (id: string, width: number, height: number) => void;
   deleteSelection: () => void;
+  reverseEdge: (id: string) => void;
+  /** 그린 경로로 Route(필요하면 새 Box까지) 생성. 성공하면 true */
+  finishRoute: (draft: RouteDraft, targetNodeId: string | null) => boolean;
+  setDraft: (draft: AppState['draft']) => void;
 
   select: (selection: Selection) => void;
   startEditing: (id: string) => void;
@@ -60,6 +68,7 @@ export const useStore = create<AppState>()((set, get) => ({
   spaceHeld: false,
   ghost: null,
   hover: { kind: 'empty' },
+  draft: null,
 
   commit: (next) =>
     set((s) => (next === s.doc ? {} : { doc: next, past: pushPast(s.past, s.doc), future: [] })),
@@ -91,6 +100,25 @@ export const useStore = create<AppState>()((set, get) => ({
     commit(selection.kind === 'node' ? removeNode(doc, selection.id) : removeEdge(doc, selection.id));
     set({ selection: null, editingNodeId: null });
   },
+
+  reverseEdge: (id) => {
+    const { doc, commit } = get();
+    commit(reverseRoute(doc, id));
+  },
+
+  finishRoute: (draft, targetNodeId) => {
+    const { doc, commit, viewport } = get();
+    const result = createRoute(doc, draft, targetNodeId, viewport.zoom);
+    if (!result) return false;
+    commit(result.doc);
+    if (result.editNodeId) {
+      set({ selection: { kind: 'node', id: result.editNodeId }, editingNodeId: result.editNodeId });
+    } else {
+      set({ selection: { kind: 'edge', id: result.edgeId }, editingNodeId: null });
+    }
+    return true;
+  },
+  setDraft: (draft) => set({ draft }),
 
   select: (selection) => set({ selection }),
   startEditing: (id) => set({ selection: { kind: 'node', id }, editingNodeId: id }),

@@ -2,7 +2,7 @@
  * Doc에 대한 순수 함수 연산. 항상 새 객체를 반환하고 입력을 변경하지 않는다.
  * (Undo/Redo는 Doc snapshot을 그대로 보관하는 방식이므로 불변성이 중요하다)
  */
-import { DEFAULT_BOX_HEIGHT, DEFAULT_BOX_WIDTH, type BoxNode, type Doc } from './types';
+import { DEFAULT_BOX_HEIGHT, DEFAULT_BOX_WIDTH, type BoxNode, type Doc, type RouteEdge } from './types';
 
 export function addNode(doc: Doc, node: BoxNode): Doc {
   return { ...doc, nodes: { ...doc.nodes, [node.id]: node } };
@@ -53,4 +53,14 @@ export function removeEdge(doc: Doc, id: string): Doc {
   const edges = { ...doc.edges };
   delete edges[id];
   return { ...doc, edges };
+}
+
+export function addEdge(doc: Doc, edge: RouteEdge): Doc {
+  return { ...doc, edges: { ...doc.edges, [edge.id]: edge } };
+}
+
+export function updateEdge(doc: Doc, id: string, patch: Partial<Omit<RouteEdge, 'id'>>): Doc {
+  const edge = doc.edges[id];
+  if (!edge) return doc;
+  return { ...doc, edges: { ...doc.edges, [id]: { ...edge, ...patch } } };
 }

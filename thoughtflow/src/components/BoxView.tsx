@@ -1,4 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef } from 'react';
+import { neighborNode } from '../model/graph';
 import type { BoxNode } from '../model/types';
 import { useStore } from '../store/store';
 
@@ -63,6 +64,10 @@ export const BoxView = memo(function BoxView({ node, selected, editing, borderHo
  * 편집 중에는 React가 텍스트를 관리하지 않는다 (contentEditable과 React 재조정 충돌 방지).
  * 마운트 시 textContent를 넣고, blur 시 innerText를 읽어 한 번만 commit 한다.
  */
+function neighborNodeLatest(id: string, dir: 'incoming' | 'outgoing') {
+  return neighborNode(useStore.getState().doc, id, dir);
+}
+
 function BoxEditor({ nodeId, initialText }: { nodeId: string; initialText: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const committed = useRef(false);
@@ -107,6 +112,12 @@ function BoxEditor({ nodeId, initialText }: { nodeId: string; initialText: strin
         if (e.key === 'Escape') {
           e.preventDefault();
           ref.current?.blur();
+        } else if (e.key === 'Tab') {
+          // Tab: 다음 생각(outgoing Box)으로, Shift+Tab: 이전 생각(incoming Box)으로 바로 이동
+          e.preventDefault();
+          const next = neighborNodeLatest(nodeId, e.shiftKey ? 'incoming' : 'outgoing');
+          ref.current?.blur();
+          if (next) useStore.getState().startEditing(next);
         }
       }}
     />

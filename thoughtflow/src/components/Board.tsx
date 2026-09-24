@@ -1,8 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { DEFAULT_BOX_HEIGHT, DEFAULT_BOX_WIDTH } from '../model/types';
 import { useBoardInteraction } from '../interaction/useBoardInteraction';
+import { getRouteGeometry } from '../routing/routeGeometry';
 import { useStore } from '../store/store';
 import { BoxView } from './BoxView';
+import { DraftRoute } from './DraftRoute';
+import { routeRole, type RouteRole } from './highlight';
+import { RouteView } from './RouteView';
+
+/** 강조된 Route가 다른 선에 가려지지 않도록 나중에 그린다 */
+const ROLE_ORDER: Record<RouteRole, number> = { dim: 0, normal: 1, incoming: 2, outgoing: 2, selected: 3 };
 
 /** 줌에 따라 점 격자 간격을 조절해 너무 촘촘해지지 않게 한다 */
 function gridStyle(zoom: number, panX: number, panY: number): React.CSSProperties {
@@ -18,6 +25,7 @@ function cursorFor(hoverKind: string, tool: string): string | undefined {
   if (tool === 'route') return 'crosshair';
   if (hoverKind === 'node-border') return 'crosshair';
   if (hoverKind === 'node-body') return 'move';
+  if (hoverKind === 'arrow' || hoverKind === 'edge') return 'pointer';
   return undefined;
 }
 
@@ -31,7 +39,14 @@ export function Board() {
   const editingNodeId = useStore((s) => s.editingNodeId);
   const hover = useStore((s) => s.hover);
   const ghost = useStore((s) => s.ghost);
+  const draft = useStore((s) => s.draft);
   useBoardInteraction(boardRef);
+  const geoms = getRouteGeometry(doc);
+  const routes = Object.values(doc.edges)
+    .map((e) => ({ edge: e, geom: geoms.get(e.id), role: routeRole(e, selection) }))
+    .filter((r) => r.geom)
+    .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
+  const hoverEdgeId = hover.kind === 'edge' || hover.kind === 'arrow' ? hover.edgeId : null;
 
   useEffect(() => {
     const el = boardRef.current;
@@ -57,7 +72,22 @@ export function Board() {
       data-testid="board"
     >
       <svg className="layer layer-edges">
-        <g transform={svgTransform} />
+        <defs>
+          <filter id="route-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.5" />
+          </filter>
+        </defs>
+        <g transform={svgTransform}>
+          {routes.map(({ edge, geom, role }) => (
+            <RouteView
+              key={edge.id}
+              geom={geom!}
+              role={role}
+              hovered={hoverEdgeId === edge.id && tool === 'select'}
+              arrowHovered={hover.kind === 'arrow' && hover.edgeId === edge.id && tool === 'select'}
+            />
+          ))}
+        </g>
       </svg>
       <div className="layer layer-nodes" style={{ transform: cssTransform }}>
         {Object.values(doc.nodes).map((n) => (
@@ -67,7 +97,7 @@ export function Board() {
             selected={selection?.kind === 'node' && selection.id === n.id}
             editing={editingNodeId === n.id}
             borderHover={hoverNodeId === n.id && (hover.kind === 'node-border' || tool === 'route')}
-            dropTarget={false}
+            dropTarget={draft?.targetNodeId === n.id}
           />
         ))}
         {ghost && (
@@ -80,7 +110,7 @@ export function Board() {
         )}
       </div>
       <svg className="layer layer-overlay">
-        <g transform={svgTransform} />
+        <g transform={svgTransform}>{draft && <DraftRoute doc={doc} draft={draft} />}</g>
       </svg>
       {Object.keys(doc.nodes).length === 0 && !ghost && (
         <div className="empty-hint">
