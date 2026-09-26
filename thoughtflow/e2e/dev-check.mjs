@@ -12,7 +12,7 @@ await win.waitForSelector('[data-testid=board]');
 await win.mouse.dblclick(500, 300);
 await win.keyboard.type('개발 모드 테스트');
 await win.keyboard.press('Escape');
-// 왼쪽 창 + 검색도 개발 모드(StrictMode)에서 확인
+// 오른쪽 창 + 검색도 개발 모드(StrictMode)에서 확인
 await win.mouse.click(500, 300);
 await win.click('[data-testid=panel-note]');
 await win.keyboard.type('메모');

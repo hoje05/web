@@ -29,7 +29,7 @@ export interface AppState extends History {
   /** 그리는 중인 Route (world 좌표) + 놓으면 연결될 Box */
   draft: (RouteDraft & { targetNodeId: string | null }) | null;
 
-  // ── 왼쪽 창 (Box별 생각 메모) ──
+  // ── 오른쪽 창 (Box별 생각 메모) ──
   panelOpen: boolean;
   /** 사용자가 창을 닫았으면 true → 클릭으로는 다시 열지 않고, 더블클릭으로만 연다 */
   panelDismissed: boolean;
@@ -321,10 +321,10 @@ export const useStore = create<AppState>()((set, get) => ({
     if (!s.panelOpen && s.panelDismissed && !opts.force) return;
     const tabs = s.tabs.includes(id) ? s.tabs : [...s.tabs, id];
     if (!s.panelOpen) {
-      // 창이 Board 왼쪽을 차지해도 Board 내용이 화면에서 움직이지 않도록 pan 보정
+      // 창은 Board 오른쪽을 차지한다. Board 왼쪽 끝은 그대로라 내용이 움직이지 않는다.
+      // (boardSize는 ResizeObserver가 곧 갱신하지만, 바로 아래 ensureVisible이 새 크기를 쓰도록 미리 반영)
       set({
         panelOpen: true,
-        viewport: { ...s.viewport, panX: s.viewport.panX - s.panelWidth },
         boardSize: { ...s.boardSize, width: Math.max(1, s.boardSize.width - s.panelWidth) },
       });
     }
@@ -341,7 +341,6 @@ export const useStore = create<AppState>()((set, get) => ({
     if (!s.panelOpen) return;
     set({
       panelOpen: false,
-      viewport: { ...s.viewport, panX: s.viewport.panX + s.panelWidth },
       boardSize: { ...s.boardSize, width: s.boardSize.width + s.panelWidth },
     });
   },
@@ -366,12 +365,7 @@ export const useStore = create<AppState>()((set, get) => ({
     if (!d) return;
     set({
       panelWidth: w,
-      ...(s.panelOpen
-        ? {
-            viewport: { ...s.viewport, panX: s.viewport.panX - d },
-            boardSize: { ...s.boardSize, width: Math.max(1, s.boardSize.width - d) },
-          }
-        : {}),
+      ...(s.panelOpen ? { boardSize: { ...s.boardSize, width: Math.max(1, s.boardSize.width - d) } } : {}),
     });
   },
   setPanelDismissed: (panelDismissed) => set({ panelDismissed }),

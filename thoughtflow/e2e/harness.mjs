@@ -14,7 +14,7 @@ export function makeSandbox() {
 }
 
 /**
- * autoPanel=false(기본): 클릭해도 왼쪽 창이 열리지 않는 상태로 시작 (Board 동작만 검사하는 시나리오용)
+ * autoPanel=false(기본): 클릭해도 오른쪽 창이 열리지 않는 상태로 시작 (Board 동작만 검사하는 시나리오용)
  */
 export async function launch(extraArgs = [], { sandbox = makeSandbox(), autoPanel = false } = {}) {
   const app = await electron.launch({
@@ -62,7 +62,7 @@ export async function drag(win, from, to, { steps = 12, path = null } = {}) {
   await win.mouse.up();
 }
 
-/** world 좌표 → 창(window) 좌표 (왼쪽 창이 열려 Board가 옮겨진 것까지 반영) */
+/** world 좌표 → 창(window) 좌표 (Board 요소의 위치까지 반영) */
 export async function toScreen(win, p) {
   const { viewport } = await state(win);
   const o = await win.evaluate(() => {

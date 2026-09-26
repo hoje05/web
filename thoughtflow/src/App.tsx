@@ -37,7 +37,7 @@ export function App() {
   return (
     <div className="app">
       <SidePanel />
-      <div className="board-area" style={{ left: panelOpen ? panelWidth : 0 }}>
+      <div className="board-area" style={{ right: panelOpen ? panelWidth : 0 }}>
         <Board />
         <Toolbar />
         <ZoomControls />

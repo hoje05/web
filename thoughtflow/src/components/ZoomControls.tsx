@@ -43,7 +43,7 @@ export function ZoomControls() {
 
 const HELP: [string, string][] = [
   ['Box 만들기', 'Box를 Board로 끌어다 놓기 · 빈 곳 더블클릭'],
-  ['생각 쓰기', 'Box 클릭 → 왼쪽 창에 자유롭게 쓰기'],
+  ['생각 쓰기', 'Box 클릭 → 오른쪽 창에 자유롭게 쓰기'],
   ['창 닫기/열기', '창의 × 로 닫기 · Box 더블클릭으로 다시 열기'],
   ['창 전환', '창 위쪽 탭 클릭 · 들어온/나간 흐름 클릭'],
   ['Box 글 바로 고치기', 'Box 선택 후 Enter  /  완료 Esc  /  다음 Box Tab'],

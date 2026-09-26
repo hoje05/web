@@ -4,7 +4,7 @@ import type { BoxNode, Doc } from '../model/types';
 import { nodeMatches, useStore } from '../store/store';
 
 /**
- * 왼쪽 창: Box 하나에 대한 긴 생각을 쓰는 곳.
+ * 오른쪽 창: Box 하나에 대한 긴 생각을 쓰는 곳.
  *  - 윗부분: 연 Box들이 탭으로 한 줄 나열 → 클릭하면 그 Box의 창으로 전환
  *  - 제목(= Box에 보이는 글), 들어온/나간 흐름, 메모
  *  - × 로 닫으면, 다시 열 때는 Box 더블클릭
@@ -295,7 +295,8 @@ function ResizeHandle() {
         e.preventDefault();
         const el = e.currentTarget;
         el.setPointerCapture(e.pointerId);
-        const move = (ev: PointerEvent) => useStore.getState().setPanelWidth(ev.clientX);
+        // 창은 화면 오른쪽 끝에 붙어 있으므로, 왼쪽 가장자리를 끌면 너비 = 화면 폭 - 마우스 x
+        const move = (ev: PointerEvent) => useStore.getState().setPanelWidth(window.innerWidth - ev.clientX);
         const up = () => {
           el.removeEventListener('pointermove', move);
           el.removeEventListener('pointerup', up);

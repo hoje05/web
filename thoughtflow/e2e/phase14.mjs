@@ -1,4 +1,4 @@
-// 왼쪽 창(Box별 생각), 탭, Ctrl+F 검색, 자동 저장, 검은색 테마
+// 오른쪽 창(Box별 생각), 탭, Ctrl+F 검색, 자동 저장, 검은색 테마
 import { launch, state, drag, assert, toScreen, shutdown } from './harness.mjs';
 import { readFileSync, rmSync } from 'node:fs';
 
@@ -40,14 +40,26 @@ try {
   await drag(win, await border('실험해 봄', 'bottom'), await center('결과 정리'), { steps: 15 });
   await win.keyboard.press('Escape');
 
-  // 1) Box 클릭 → 왼쪽 창이 열리고 그 Box의 생각
-  const before = await center('실험해 봄');
-  await clickBox('실험해 봄');
+  // 1) Box 클릭 → 오른쪽 창이 열리고 그 Box의 생각
+  const before = await center('문제 발견');
+  await clickBox('문제 발견');
   let s = await state(win);
-  assert(s.panelOpen && s.activeTab === (await node('실험해 봄')).id, 'clicking a box opens the left panel for it');
+  assert(s.panelOpen && s.activeTab === (await node('문제 발견')).id, 'clicking a box opens the right panel for it');
   assert(await win.isVisible('[data-testid=side-panel]'), 'panel visible');
-  const after = await center('실험해 봄');
+  const panelBox = await win.locator('[data-testid=side-panel]').boundingBox();
+  assert(Math.abs(panelBox.x + panelBox.width - 1280) < 1 && panelBox.x > 800, `panel is docked on the right (x=${panelBox.x})`);
+  const after = await center('문제 발견');
   assert(Math.abs(after.x - before.x) < 1 && Math.abs(after.y - before.y) < 1, 'board content does not jump when the panel opens');
+
+  // 창에 일부가 가려진 오른쪽 Box를 (보이는 부분을) 클릭하면 전체가 보이는 곳으로 옮겨진다
+  const partly = await node('실험해 봄');
+  const visiblePart = await toScreen(win, { x: partly.x + 12, y: partly.y + partly.height / 2 });
+  assert(visiblePart.x < panelBox.x && (await toScreen(win, { x: partly.x + partly.width, y: 0 })).x > panelBox.x, 'box is partly under the panel');
+  await win.mouse.click(visiblePart.x, visiblePart.y);
+  s = await state(win);
+  const shown = await node('실험해 봄');
+  const right = await toScreen(win, { x: shown.x + shown.width, y: shown.y });
+  assert(s.activeTab === shown.id && right.x < panelBox.x, 'a box hidden by the panel is brought into view');
   assert((await win.inputValue('[data-testid=panel-title]')) === '실험해 봄', 'panel title shows the box text');
   assert((await win.textContent('.panel-flow')).includes('문제 발견') && (await win.textContent('.panel-flow')).includes('결과 정리'),
     'panel shows incoming/outgoing flow');
@@ -81,7 +93,7 @@ try {
   await clickBox('결과 정리');
   s = await state(win);
   const labels = await win.$$eval('[data-testid=panel-tab] .panel-tab-label', (els) => els.map((e) => e.textContent));
-  assert(JSON.stringify(labels) === JSON.stringify(['실험해 봄 (1차)', '문제 발견', '결과 정리']), `tabs in a row: ${labels.join(' | ')}`);
+  assert(JSON.stringify(labels) === JSON.stringify(['문제 발견', '실험해 봄 (1차)', '결과 정리']), `tabs in a row: ${labels.join(' | ')}`);
   assert(s.activeTab === (await node('결과 정리')).id, 'last clicked box is the active tab');
   await win.click('[data-testid=panel-tab]:has-text("실험해 봄")');
   s = await state(win);
@@ -141,10 +153,10 @@ try {
   const now = JSON.parse(readFileSync(file, 'utf-8'));
   assert(now.nodes.some((n) => n.note.endsWith('추가 메모')), 'Ctrl+S while typing saves immediately');
 
-  // 7) 창 너비 조절
+  // 7) 창 너비 조절 (창의 왼쪽 가장자리를 왼쪽으로 끌면 넓어짐)
   const w0 = await win.evaluate(() => window.__tf.getState().panelWidth);
   const handle = await win.locator('.panel-resize').boundingBox();
-  await drag(win, { x: handle.x + 4, y: 400 }, { x: handle.x + 124, y: 400 }, { steps: 6 });
+  await drag(win, { x: handle.x + 4, y: 400 }, { x: handle.x - 116, y: 400 }, { steps: 6 });
   const w1 = await win.evaluate(() => window.__tf.getState().panelWidth);
   assert(w1 - w0 > 100, `panel resizable (${w0} → ${w1})`);
 

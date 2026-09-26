@@ -9,11 +9,11 @@ Box에 생각·행동·결과를 적고, 방향이 있는 **Route**로 이어서
 ![Box를 선택하면 들어온 흐름은 보라, 나간 흐름은 초록](docs/images/flow-highlight.png)
 
 - Box 종류(Thought/Action/Result)를 강제하지 않습니다. 모든 Box는 같은 일반 Box입니다.
-- Box를 클릭하면 **왼쪽 창**에서 그 생각을 길게 적을 수 있고, 창 위쪽 **탭**으로 여러 생각을 오갈 수 있습니다.
+- Box를 클릭하면 **오른쪽 창**에서 그 생각을 길게 적을 수 있고, 창 위쪽 **탭**으로 여러 생각을 오갈 수 있습니다.
 - 행동할 때마다 **자동 저장**됩니다. 로그인·클라우드 없이 내 PC의 파일(`.tflow`)에 저장하는 Local-first 앱입니다.
 - 검은색 테마.
 
-![Box를 클릭하면 왼쪽 창에서 그 생각을 적는다](docs/images/side-panel.png)
+![Box를 클릭하면 오른쪽 창에서 그 생각을 적는다](docs/images/side-panel.png)
 
 ## 실행하기
 
@@ -40,10 +40,10 @@ npm run dist       # release/ThoughtFlow-Setup-0.2.0.exe 생성
 | 하고 싶은 것 | 방법 |
 |---|---|
 | Box 만들기 | 왼쪽 Toolbar의 **Box**를 Board로 끌어다 놓기 · 빈 곳 **더블클릭** (Box 버튼 클릭 = 화면 중앙에 생성) |
-| **생각 적기** | Box **클릭** → 왼쪽 창이 열리고 제목과 메모를 자유롭게 작성 (제목을 고치면 Box도 바뀜) |
+| **생각 적기** | Box **클릭** → 오른쪽 창이 열리고 제목과 메모를 자유롭게 작성 (제목을 고치면 Box도 바뀜) |
 | 창 닫기 / 다시 열기 | 창 오른쪽 위 **×** 로 닫기 → 닫은 뒤에는 클릭해도 열리지 않고, Box **더블클릭**으로 다시 열기 |
 | 창 전환 | 창 위쪽에 한 줄로 나열된 **탭** 클릭 · 창 안의 들어온/나간 흐름 클릭 · 탭 ×(또는 휠 버튼)로 탭 닫기 |
-| 창 너비 | 창 오른쪽 가장자리를 끌어서 조절 |
+| 창 너비 | 창 왼쪽 가장자리를 끌어서 조절 |
 | Box 글 바로 고치기 | 새 Box는 바로 입력 상태 · 선택 후 `Enter` · `Enter`는 줄바꿈 · `Esc`/바깥 클릭으로 완료 |
 | **다음 생각 잇기** | Box **테두리**에서 끌어내 빈 곳에 놓기 → 새 Box가 생기고 바로 입력 |
 | Box끼리 연결 | Box 테두리에서 끌어 다른 Box 위에 놓기 |
@@ -96,7 +96,7 @@ src/routing/     Route 생성, 샘플링, RDP 단순화, smoothing, 보정, 렌�
 src/store/       Zustand 상태 + Undo/Redo
 src/interaction/ hit test, pointer 상태 머신, 단축키, 명령
 src/persistence/ .tflow 파일 형식(검증 포함), 열기/저장/자동 저장
-src/components/  Board, BoxView, RouteView, Toolbar, SidePanel(왼쪽 창·탭), SearchBar, SaveStatus …
+src/components/  Board, BoxView, RouteView, Toolbar, SidePanel(오른쪽 창·탭), SearchBar, SaveStatus …
 ```
 
 ## 테스트
@@ -112,5 +112,5 @@ Linux(화면 없는 환경)에서는 `xvfb-run -a npm run e2e`로 실행합니�
 
 ## 파일 형식 (`.tflow`)
 
-JSON입니다(현재 버전 2 — 버전 1 파일도 열 수 있음). 각 Box에는 Board에 보이는 `text`와 왼쪽 창의 메모 `note`가 있습니다. Route의 방향은 `sourceNodeId → targetNodeId`로 표현하고, 곡선은 시작/끝 Anchor를 잇는 선분 기준의
+JSON입니다(현재 버전 2 — 버전 1 파일도 열 수 있음). 각 Box에는 Board에 보이는 `text`와 오른쪽 창의 메모 `note`가 있습니다. Route의 방향은 `sourceNodeId → targetNodeId`로 표현하고, 곡선은 시작/끝 Anchor를 잇는 선분 기준의
 상대 좌표(`pathPoints: [u, v]`)로 저장해서 Box를 옮겨도 곡선 형태가 유지됩니다. 자세한 내용은 `src/persistence/fileFormat.ts` 참고.

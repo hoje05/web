@@ -4,7 +4,7 @@
  * {
  *   "format": "thoughtflow", "version": 1,
  *   "board": { "zoom", "panX", "panY" },
- *   "nodes": [{ "id", "x", "y", "width", "height", "text", "note" }],   // note = 왼쪽 창의 메모 (v2)
+ *   "nodes": [{ "id", "x", "y", "width", "height", "text", "note" }],   // note = 오른쪽 창의 메모 (v2)
  *   "edges": [{ "id", "sourceNodeId", "targetNodeId",
  *               "sourceAnchor": { "side" }, "targetAnchor": { "side" },
  *               "pathPoints": [[u, v], ...],   // Chord 좌표 (source → target 순서)

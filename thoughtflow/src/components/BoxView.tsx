@@ -13,7 +13,7 @@ interface Props {
   dropTarget: boolean;
   /** 검색 중: 일치(match) / 불일치(dim) / 검색 아님(null) */
   search: 'match' | 'dim' | null;
-  /** 왼쪽 창에서 보고 있는 Box */
+  /** 오른쪽 창에서 보고 있는 Box */
   active: boolean;
 }
 

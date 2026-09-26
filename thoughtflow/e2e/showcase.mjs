@@ -85,7 +85,7 @@ try {
   await win.mouse.move(hv.x, hv.y);
   await win.waitForTimeout(150);
   await win.screenshot({ path: 'e2e/out/showcase-4-hover-help.png' });
-  // 6) 왼쪽 창: Box를 클릭해 그 생각을 길게 적기
+  // 6) 오른쪽 창: Box를 클릭해 그 생각을 길게 적기
   await win.click('button[title="사용법"]');
   await win.evaluate(() => window.__tf.getState().setPanelDismissed(false));
   const target = await nodeBy('3개 메뉴만 90% 사용');

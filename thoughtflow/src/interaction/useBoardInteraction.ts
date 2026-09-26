@@ -226,7 +226,7 @@ export function useBoardInteraction(boardRef: RefObject<HTMLDivElement | null>) 
         if (!g.moved && g.clearOnClick) s.select(null);
       } else if (g.kind === 'movingNode') {
         if (g.moved) s.commitFrom(g.startDoc);
-        // 그냥 클릭: 왼쪽 창에 이 Box의 생각을 연다 (사용자가 창을 닫아 두었으면 열지 않음)
+        // 그냥 클릭: 오른쪽 창에 이 Box의 생각을 연다 (사용자가 창을 닫아 두었으면 열지 않음)
         else s.openPage(g.nodeId);
       } else if (g.kind === 'pressArrow') {
         s.reverseEdge(g.edgeId);

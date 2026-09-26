@@ -46,11 +46,11 @@ body,
   height: 100%;
 }
 
-/* 왼쪽 창이 열리면 Board 영역은 그 오른쪽을 차지한다 */
+/* 오른쪽 창이 열리면 Board 영역은 그 왼쪽을 차지한다 */
 .board-area {
   position: absolute;
   top: 0;
-  right: 0;
+  left: 0;
   bottom: 0;
 }
 
@@ -499,15 +499,15 @@ svg.layer {
   opacity: 0.3;
 }
 
-/* 왼쪽 창에서 보고 있는 Box: 왼쪽 가장자리에 밝은 막대 */
+/* 오른쪽 창에서 보고 있는 Box: 창 쪽(오른쪽) 가장자리에 밝은 막대 */
 .box.is-active-page::after {
   content: '';
   position: absolute;
-  left: -1px;
+  right: -1px;
   top: 10px;
   bottom: 10px;
   width: 3px;
-  border-radius: 0 3px 3px 0;
+  border-radius: 3px 0 0 3px;
   background: var(--ink);
   opacity: 0.85;
 }
@@ -527,17 +527,17 @@ svg.layer {
   pointer-events: none;
 }
 
-/* ───────────── 왼쪽 창 ───────────── */
+/* ───────────── 오른쪽 창 ───────────── */
 
 .side-panel {
   position: absolute;
-  left: 0;
+  right: 0;
   top: 0;
   bottom: 0;
   display: flex;
   flex-direction: column;
   background: var(--panel-2);
-  border-right: 1px solid var(--panel-border);
+  border-left: 1px solid var(--panel-border);
   z-index: 20;
 }
 
@@ -800,7 +800,7 @@ svg.layer {
 .panel-resize {
   position: absolute;
   top: 0;
-  right: -4px;
+  left: -4px;
   bottom: 0;
   width: 8px;
   cursor: col-resize;
