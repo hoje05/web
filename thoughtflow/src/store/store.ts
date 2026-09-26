@@ -8,6 +8,7 @@ import { fitBounds, screenToWorld, zoomAt } from '../viewport/viewport';
 import type { Hit } from '../interaction/hitTest';
 import { createRoute, type RouteDraft } from '../routing/createRoute';
 import { correctRoute, reverseRoute } from '../routing/routeOps';
+import type { BoardUiState } from '../persistence/fileFormat';
 import { pushPast, type History } from './history';
 
 export interface AppState extends History {
@@ -49,6 +50,12 @@ export interface AppState extends History {
   // ── 자동 저장 상태 ──
   saveState: 'idle' | 'saving' | 'saved' | 'error';
 
+  // ── 프로젝트 창 (왼쪽에서 스르륵) ──
+  drawerOpen: boolean;
+  /** 열 때 바로 "새 프로젝트" 이름 입력칸을 보여 줄지 */
+  drawerCreate: boolean;
+  setDrawer: (open: boolean, create?: boolean) => void;
+
   // ── Doc 변경 (history) ──
   /** 새 Doc을 적용하고 이전 Doc을 Undo 기록에 넣는다 */
   commit: (next: Doc) => void;
@@ -61,7 +68,9 @@ export interface AppState extends History {
 
   // ── 파일 ──
   resetBoard: () => void;
-  loadBoard: (doc: Doc, viewport: Viewport | null, filePath: string) => void;
+  loadBoard: (doc: Doc, viewport: Viewport | null, filePath: string, ui?: BoardUiState | null) => void;
+  /** 파일에 함께 저장하는 화면 상태 (오른쪽 창의 탭) */
+  uiState: () => BoardUiState;
   markSaved: (filePath: string | null, doc: Doc) => void;
 
   // ── 편의 action ──
@@ -137,6 +146,9 @@ export const useStore = create<AppState>()((set, get) => ({
   searchSeq: 0,
   searchQuery: '',
   saveState: 'idle',
+  drawerOpen: false,
+  drawerCreate: false,
+  setDrawer: (drawerOpen, drawerCreate = false) => set({ drawerOpen, drawerCreate: drawerOpen && drawerCreate }),
 
   commit: (next) =>
     set((s) => (next === s.doc ? {} : { doc: next, past: pushPast(s.past, s.doc), future: [] })),
@@ -184,11 +196,14 @@ export const useStore = create<AppState>()((set, get) => ({
       tool: 'select',
       viewport: { zoom: 1, panX: boardSize.width / 2, panY: boardSize.height / 2 },
       saveState: 'idle',
+  drawerOpen: false,
+  drawerCreate: false,
+  setDrawer: (drawerOpen, drawerCreate = false) => set({ drawerOpen, drawerCreate: drawerOpen && drawerCreate }),
     });
     get().closePanel();
     set({ tabs: [], activeTab: null, panelDismissed: false });
   },
-  loadBoard: (doc, viewport, filePath) => {
+  loadBoard: (doc, viewport, filePath, ui) => {
     set({
       doc,
       savedDoc: doc,
@@ -205,6 +220,18 @@ export const useStore = create<AppState>()((set, get) => ({
     set({ tabs: [], activeTab: null, panelDismissed: false });
     if (viewport) set({ viewport });
     else get().fitView();
+    // 이 프로젝트에서 보던 탭/오른쪽 창을 그대로
+    if (ui && ui.tabs.length) {
+      set({ tabs: ui.tabs, activeTab: ui.activeTab });
+      if (ui.panelOpen && ui.activeTab) {
+        const s = get();
+        set({ panelOpen: true, boardSize: { ...s.boardSize, width: Math.max(1, s.boardSize.width - s.panelWidth) } });
+      }
+    }
+  },
+  uiState: () => {
+    const s = get();
+    return { tabs: s.tabs, activeTab: s.activeTab, panelOpen: s.panelOpen };
   },
   markSaved: (filePath, doc) => set({ filePath, savedDoc: doc }),
 

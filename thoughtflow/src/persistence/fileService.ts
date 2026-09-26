@@ -27,7 +27,26 @@ type Api = {
   closeCancelled: () => void;
   onMenuCommand: (cb: (command: string) => void) => () => void;
   onOpenPath: (cb: (filePath: string) => void) => () => void;
+  minimize: () => void;
+  toggleMaximize: () => void;
+  closeWindow: () => void;
+  isMaximized: () => Promise<boolean>;
+  onWindowState: (cb: (state: { maximized: boolean }) => void) => () => void;
+  showMenu: (x: number, y: number) => void;
+  listProjects: () => Promise<ProjectInfo[]>;
+  newProjectPath: (name: string) => Promise<{ filePath: string } | { error: string }>;
+  renameProject: (filePath: string, name: string) => Promise<{ filePath: string } | { error: string }>;
+  deleteProject: (filePath: string) => Promise<{ deleted: boolean }>;
+  revealProjects: () => Promise<void>;
 };
+
+/** 프로젝트 = 보드 파일 하나 */
+export interface ProjectInfo {
+  filePath: string;
+  name: string;
+  modifiedAt: number;
+  boxCount: number | null;
+}
 
 export const desktopApi: Api | undefined = (window as unknown as { thoughtflow?: Api }).thoughtflow;
 
@@ -37,6 +56,10 @@ async function alertUser(message: string) {
 }
 
 export const fileName = (path: string | null) => (path ? (path.split(/[\\/]/).pop() ?? path) : '제목 없음');
+/** 프로젝트 이름 = 파일 이름에서 확장자를 뺀 것 */
+export const projectName = (path: string | null) => (path ? fileName(path).replace(/\.(tflow|json)$/i, '') : '새 보드');
+/** Windows 경로는 대소문자를 구분하지 않는다 */
+export const samePath = (a: string | null, b: string | null) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 
 const isEmptyDoc = (doc: Doc) => Object.keys(doc.nodes).length === 0 && Object.keys(doc.edges).length === 0;
 
@@ -46,6 +69,32 @@ export const AUTOSAVE_DELAY = 400;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let running: Promise<boolean> | null = null;
 let again = false;
+/** 프로젝트 이름 바꾸기/삭제 중에는 자동 저장을 잠시 멈춘다 (옛 경로에 다시 쓰지 않도록) */
+let paused = 0;
+
+function scheduleAutosave() {
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(() => {
+    timer = null;
+    if (paused) return scheduleAutosave();
+    void saveNow();
+  }, AUTOSAVE_DELAY);
+}
+
+async function withAutosavePaused<T>(fn: () => Promise<T>): Promise<T> {
+  paused++;
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+  try {
+    return await fn();
+  } finally {
+    paused--;
+    const s = useStore.getState();
+    if (!paused && s.doc !== s.savedDoc) scheduleAutosave();
+  }
+}
 
 /**
  * 지금 저장한다. 저장할 변경이 없으면 아무것도 하지 않는다 (force면 viewport까지 다시 기록).
@@ -74,7 +123,7 @@ export function saveNow(force = false): Promise<boolean> {
 }
 
 async function writeCurrent(force: boolean): Promise<boolean> {
-  if (!desktopApi) return true;
+  if (!desktopApi || paused) return true;
   const s = useStore.getState();
   const doc = s.doc;
   if (doc === s.savedDoc && !(force && s.filePath)) return true;
@@ -86,7 +135,8 @@ async function writeCurrent(force: boolean): Promise<boolean> {
   s.setSaveState('saving');
   try {
     const path = s.filePath ?? (await desktopApi.newBoardPath());
-    const res = await desktopApi.saveFile({ filePath: path, content: serializeBoard(doc, s.viewport), suggestedName: '' });
+    const content = serializeBoard(doc, s.viewport, s.uiState());
+    const res = await desktopApi.saveFile({ filePath: path, content, suggestedName: '' });
     if (res.canceled) throw new Error('저장이 취소되었습니다.');
     const now = useStore.getState();
     // 저장하는 동안 다른 보드를 열었다면 상태를 덮어쓰지 않는다
@@ -107,11 +157,7 @@ async function writeCurrent(force: boolean): Promise<boolean> {
 export function startAutosave(): () => void {
   return useStore.subscribe((s, prev) => {
     if (s.doc === prev.doc || s.doc === s.savedDoc) return;
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => {
-      timer = null;
-      void saveNow();
-    }, AUTOSAVE_DELAY);
+    scheduleAutosave();
   });
 }
 
@@ -131,7 +177,7 @@ export async function saveBoardAs(): Promise<boolean> {
   try {
     const res = await desktopApi.saveFile({
       filePath: null,
-      content: serializeBoard(s.doc, s.viewport),
+      content: serializeBoard(s.doc, s.viewport, s.uiState()),
       suggestedName: s.filePath ? fileName(s.filePath) : `생각 흐름.${FILE_EXTENSION}`,
     });
     if (res.canceled) return false;
@@ -145,17 +191,9 @@ export async function saveBoardAs(): Promise<boolean> {
   }
 }
 
-/** 현재 보드를 저장한 뒤 새 보드 */
-export async function newBoard() {
-  flushEditing();
-  if (!(await saveNow())) return;
-  useStore.getState().resetBoard();
-  desktopApi?.setLastFile(null);
-}
-
 function loadContent(filePath: string, content: string) {
-  const { doc, viewport, warnings } = parseBoard(content);
-  useStore.getState().loadBoard(doc, viewport, filePath);
+  const { doc, viewport, ui, warnings } = parseBoard(content);
+  useStore.getState().loadBoard(doc, viewport, filePath, ui);
   desktopApi?.setLastFile(filePath);
   if (warnings.length) void alertUser(`파일 일부를 복구하지 못했습니다.\n${[...new Set(warnings)].join('\n')}`);
 }
@@ -163,7 +201,7 @@ function loadContent(filePath: string, content: string) {
 export async function openBoard() {
   if (!desktopApi) return;
   flushEditing();
-  if (!(await saveNow())) return;
+  if (!(await saveNow(true))) return;
   try {
     const res = await desktopApi.openFile();
     if (res.canceled) return;
@@ -176,7 +214,8 @@ export async function openBoard() {
 export async function openPath(filePath: string) {
   if (!desktopApi) return;
   flushEditing();
-  if (!(await saveNow())) return;
+  // 지금 프로젝트의 마지막 상태(탭, 화면 위치 포함)를 저장한 뒤 전환
+  if (!(await saveNow(true))) return;
   try {
     const res = await desktopApi.readFile(filePath);
     loadContent(res.filePath, res.content);
@@ -207,4 +246,58 @@ export async function flushAndClose() {
   } else {
     desktopApi?.closeCancelled();
   }
+}
+
+// ───────────── 프로젝트 ─────────────
+
+export async function listProjects(): Promise<ProjectInfo[]> {
+  return desktopApi ? desktopApi.listProjects() : [];
+}
+
+/** 다른 프로젝트로 전환 (지금 프로젝트는 저장한 뒤) */
+export async function switchProject(filePath: string) {
+  if (samePath(useStore.getState().filePath, filePath)) return;
+  await openPath(filePath);
+}
+
+/** 새 프로젝트: 지금 프로젝트를 저장하고, 이름을 붙인 빈 보드를 만든다. 실패하면 이유를 돌려준다. */
+export async function createProject(name: string): Promise<string | null> {
+  if (!desktopApi) return '데스크톱 앱에서만 사용할 수 있습니다.';
+  flushEditing();
+  if (!(await saveNow(true))) return '지금 프로젝트를 저장하지 못했습니다.';
+  const res = await desktopApi.newProjectPath(name);
+  if ('error' in res) return res.error;
+  useStore.getState().resetBoard();
+  useStore.setState({ filePath: res.filePath });
+  if (!(await saveNow(true))) return '프로젝트 파일을 만들지 못했습니다.';
+  return null;
+}
+
+export async function renameProject(filePath: string, name: string): Promise<string | null> {
+  if (!desktopApi) return null;
+  const isCurrent = samePath(useStore.getState().filePath, filePath);
+  if (isCurrent) {
+    flushEditing();
+    await saveNow(true);
+  }
+  return withAutosavePaused(async () => {
+    const res = await desktopApi!.renameProject(filePath, name);
+    if ('error' in res) return res.error;
+    if (isCurrent) useStore.setState({ filePath: res.filePath });
+    return null;
+  });
+}
+
+/** 휴지통으로 옮긴다 (확인은 main process 대화상자). 지금 프로젝트였다면 새 보드로. */
+export async function deleteProject(filePath: string): Promise<boolean> {
+  if (!desktopApi) return false;
+  return withAutosavePaused(async () => {
+    const { deleted } = await desktopApi!.deleteProject(filePath);
+    if (deleted && samePath(useStore.getState().filePath, filePath)) useStore.getState().resetBoard();
+    return deleted;
+  });
+}
+
+export function revealProjects() {
+  void desktopApi?.revealProjects();
 }

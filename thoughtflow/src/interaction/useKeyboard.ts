@@ -55,6 +55,8 @@ export function useKeyboard() {
       if (editing) return;
 
       const s = useStore.getState();
+      // 프로젝트 창이 열려 있으면 Board 단축키는 쉰다 (Esc는 프로젝트 창이 처리)
+      if (s.drawerOpen) return;
       if (e.code === 'Space') {
         e.preventDefault();
         if (!e.repeat) s.setSpaceHeld(true);

@@ -60,6 +60,13 @@ describe('file format', () => {
     expect(parseBoard(v1).doc.nodes.a.note).toBe('');
   });
 
+  it('remembers the right panel tabs per project (ui)', () => {
+    const text = serializeBoard(doc, { zoom: 1, panX: 0, panY: 0 }, { tabs: ['b', 'gone', 'a'], activeTab: 'a', panelOpen: true });
+    const { ui } = parseBoard(text);
+    expect(ui).toEqual({ tabs: ['b', 'a'], activeTab: 'a', panelOpen: true });
+    expect(parseBoard(serializeBoard(doc, { zoom: 1, panX: 0, panY: 0 })).ui).toBeNull();
+  });
+
   it('drops routes that point to missing boxes', () => {
     const json = JSON.parse(serializeBoard(doc, { zoom: 1, panX: 0, panY: 0 }));
     json.nodes = json.nodes.filter((n: { id: string }) => n.id !== 'b');

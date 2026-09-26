@@ -28,6 +28,28 @@ const api = {
     ipcRenderer.on('menu-command', listener);
     return () => ipcRenderer.removeListener('menu-command', listener);
   },
+  // ── 프로그램 바 ──
+  minimize: () => ipcRenderer.send('win:minimize'),
+  toggleMaximize: () => ipcRenderer.send('win:toggle-maximize'),
+  closeWindow: () => ipcRenderer.send('win:close'),
+  isMaximized: (): Promise<boolean> => ipcRenderer.invoke('win:is-maximized'),
+  onWindowState: (callback: (state: { maximized: boolean }) => void) => {
+    const listener = (_e: IpcRendererEvent, state: { maximized: boolean }) => callback(state);
+    ipcRenderer.on('window-state', listener);
+    return () => ipcRenderer.removeListener('window-state', listener);
+  },
+  showMenu: (x: number, y: number) => ipcRenderer.send('app:show-menu', { x, y }),
+
+  // ── 프로젝트 ──
+  listProjects: (): Promise<{ filePath: string; name: string; modifiedAt: number; boxCount: number | null }[]> =>
+    ipcRenderer.invoke('projects:list'),
+  newProjectPath: (name: string): Promise<{ filePath: string } | { error: string }> =>
+    ipcRenderer.invoke('projects:new-path', name),
+  renameProject: (filePath: string, name: string): Promise<{ filePath: string } | { error: string }> =>
+    ipcRenderer.invoke('projects:rename', filePath, name),
+  deleteProject: (filePath: string): Promise<{ deleted: boolean }> => ipcRenderer.invoke('projects:delete', filePath),
+  revealProjects: (): Promise<void> => ipcRenderer.invoke('projects:reveal'),
+
   onOpenPath: (callback: (filePath: string) => void) => {
     const listener = (_e: IpcRendererEvent, filePath: string) => callback(filePath);
     ipcRenderer.on('open-path', listener);

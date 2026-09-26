@@ -124,12 +124,15 @@ try {
   assert(readBoard(saveAsFile).nodes.some((n) => n.text === '새 파일로'), 'autosave continues into the save-as file');
   const saved = await state(win);
 
-  // ── 새 보드: 확인 없이 바로 (이미 저장되어 있으므로)
+  // ── 새 프로젝트: Ctrl+N → 이름 입력 → 빈 보드 (지금 보드는 이미 저장되어 있으므로 확인창 없음)
   await win.keyboard.press('Control+n');
-  await win.waitForFunction(() => Object.keys(window.__tf.getState().doc.nodes).length === 0);
-  assert((await state(win)).filePath === null, 'new board (no dialog needed)');
-  await win.waitForTimeout(700);
-  assert(readdirSync(sandbox.boards).length === 1, 'empty new board does not create a file');
+  await win.waitForSelector('[data-testid=project-drawer].is-open [data-testid=project-name-input]');
+  await win.fill('[data-testid=project-name-input]', '빈 프로젝트');
+  await win.keyboard.press('Enter');
+  await win.waitForFunction(
+    () => Object.keys(window.__tf.getState().doc.nodes).length === 0 && window.__tf.getState().filePath?.endsWith('빈 프로젝트.tflow'),
+  );
+  assert(readdirSync(sandbox.boards).includes('빈 프로젝트.tflow'), 'Ctrl+N creates a new empty project (no dialog needed)');
 
   // ── 열기
   await mockDialogs(app, { open: saveAsFile });

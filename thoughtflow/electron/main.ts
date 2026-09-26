@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, type MenuItemConstructorOptions } from 'electron';
 import { existsSync, promises as fs } from 'fs';
 import * as path from 'path';
 
@@ -48,8 +48,9 @@ function buildMenu() {
     {
       label: '파일',
       submenu: [
-        item('새 보드', 'new', 'CmdOrCtrl+N'),
-        item('열기…', 'open', 'CmdOrCtrl+O'),
+        item('새 프로젝트…', 'new', 'CmdOrCtrl+N'),
+        item('프로젝트 목록', 'projects'),
+        item('다른 위치에서 열기…', 'open', 'CmdOrCtrl+O'),
         { type: 'separator' },
         item('저장', 'save', 'CmdOrCtrl+S'),
         item('다른 이름으로 저장…', 'saveAs', 'CmdOrCtrl+Shift+S'),
@@ -95,6 +96,8 @@ function createWindow() {
     minHeight: 460,
     backgroundColor: '#0e0f11',
     title: 'ThoughtFlow',
+    // 기본 제목 표시줄 대신 앱 위쪽의 프로그램 바(최소화/최대화/닫기)를 쓴다
+    frame: false,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -129,6 +132,9 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  const sendWindowState = () => mainWindow?.webContents.send('window-state', { maximized: mainWindow.isMaximized() });
+  mainWindow.on('maximize', sendWindowState);
+  mainWindow.on('unmaximize', sendWindowState);
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {
@@ -144,7 +150,13 @@ function fileArgFromArgv(argv: string[]): string | null {
   return found ? path.resolve(found) : null;
 }
 
-async function readSettings(): Promise<{ lastFile?: string }> {
+interface Settings {
+  lastFile?: string | null;
+  /** 문서/ThoughtFlow 밖에서 열었던 보드들 (프로젝트 목록에 함께 표시) */
+  recent?: string[];
+}
+
+async function readSettings(): Promise<Settings> {
   try {
     return JSON.parse(await fs.readFile(settingsPath(), 'utf-8'));
   } catch {
@@ -152,12 +164,47 @@ async function readSettings(): Promise<{ lastFile?: string }> {
   }
 }
 
-async function writeSettings(patch: { lastFile?: string | null }) {
-  const cur = await readSettings();
-  const next = { ...cur, ...patch };
-  await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
-  await fs.writeFile(settingsPath(), JSON.stringify(next, null, 2), 'utf-8');
+/** 설정 쓰기는 한 번에 하나씩 (동시에 읽고 쓰다 서로 덮어쓰지 않도록) */
+let settingsQueue: Promise<void> = Promise.resolve();
+function updateSettings(fn: (cur: Settings) => Settings): Promise<void> {
+  settingsQueue = settingsQueue.then(async () => {
+    const next = fn(await readSettings());
+    await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
+    await fs.writeFile(settingsPath(), JSON.stringify(next, null, 2), 'utf-8');
+  }, () => undefined);
+  return settingsQueue;
 }
+
+const samePath = (a: string, b: string) =>
+  process.platform === 'win32' ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b);
+
+function rememberFile(filePath: string | null) {
+  return updateSettings((cur) => {
+    const recent = (cur.recent ?? []).filter((r) => !filePath || !samePath(r, filePath));
+    if (filePath) recent.unshift(path.resolve(filePath));
+    return { ...cur, lastFile: filePath, recent: recent.slice(0, 30) };
+  });
+}
+
+function forgetFile(filePath: string) {
+  return updateSettings((cur) => ({
+    ...cur,
+    lastFile: cur.lastFile && samePath(cur.lastFile, filePath) ? null : cur.lastFile,
+    recent: (cur.recent ?? []).filter((r) => !samePath(r, filePath)),
+  }));
+}
+
+/** 프로젝트(보드 파일) 이름 검사. 문제가 있으면 이유를 돌려준다. */
+function nameProblem(name: string): string | null {
+  if (!name) return '이름을 입력해 주세요.';
+  if (/[<>:"/\\|?*\x00-\x1f]/.test(name)) return '이름에 < > : " / \\ | ? * 는 쓸 수 없습니다.';
+  if (/[. ]$/.test(name)) return '이름 끝에 마침표나 공백은 쓸 수 없습니다.';
+  if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(name)) return '사용할 수 없는 이름입니다.';
+  if (name.length > 120) return '이름이 너무 깁니다.';
+  return null;
+}
+
+const cleanName = (name: string) => name.trim().replace(/\.tflow$/i, '').trim();
 
 /** 임시 파일에 먼저 쓰고 교체 → 저장 도중 문제가 생겨도 기존 파일이 깨지지 않는다. */
 async function writeAtomic(target: string, content: string) {
@@ -255,7 +302,114 @@ function registerIpc() {
   });
 
   ipcMain.on('app:set-last-file', (_e, filePath: string | null) => {
-    void writeSettings({ lastFile: filePath });
+    void rememberFile(filePath);
+  });
+
+  // ── 프로그램 바: 창 조작 ──
+  ipcMain.on('win:minimize', () => mainWindow?.minimize());
+  ipcMain.on('win:toggle-maximize', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    else mainWindow.maximize();
+  });
+  ipcMain.on('win:close', () => mainWindow?.close());
+  ipcMain.handle('win:is-maximized', () => mainWindow?.isMaximized() ?? false);
+  /** 프로그램 바의 ⋯ 버튼: 파일/편집/보기 메뉴를 그 자리에 띄운다 */
+  ipcMain.on('app:show-menu', (_e, pos: { x: number; y: number }) => {
+    if (!mainWindow) return;
+    Menu.getApplicationMenu()?.popup({ window: mainWindow, x: Math.round(pos.x), y: Math.round(pos.y) });
+  });
+
+  // ── 프로젝트 = 보드 파일 ──
+  /** 문서/ThoughtFlow의 보드 + 다른 위치에서 열었던 보드. 최근 수정 순. */
+  ipcMain.handle('projects:list', async () => {
+    const dir = boardsDir();
+    await fs.mkdir(dir, { recursive: true });
+    const files = new Map<string, string>();
+    for (const e of await fs.readdir(dir)) {
+      if (e.toLowerCase().endsWith('.tflow')) files.set(path.join(dir, e).toLowerCase(), path.join(dir, e));
+    }
+    for (const r of (await readSettings()).recent ?? []) {
+      if (existsSync(r) && !files.has(path.resolve(r).toLowerCase())) files.set(path.resolve(r).toLowerCase(), path.resolve(r));
+    }
+    const out: { filePath: string; name: string; modifiedAt: number; boxCount: number | null }[] = [];
+    for (const p of files.values()) {
+      try {
+        const st = await fs.stat(p);
+        if (!st.isFile()) continue;
+        let boxCount: number | null = null;
+        try {
+          const data = JSON.parse(await fs.readFile(p, 'utf-8'));
+          boxCount = Array.isArray(data.nodes) ? data.nodes.length : null;
+        } catch {
+          // 읽을 수 없는 파일도 목록에는 보여 준다 (열 때 오류 안내)
+        }
+        out.push({ filePath: allow(p), name: path.basename(p, path.extname(p)), modifiedAt: st.mtimeMs, boxCount });
+      } catch {
+        // 목록을 만드는 사이 지워진 파일
+      }
+    }
+    return out.sort((a, b) => b.modifiedAt - a.modifiedAt);
+  });
+
+  /** 새 프로젝트 파일 경로 (아직 만들지는 않음 — renderer가 빈 보드를 바로 저장한다) */
+  ipcMain.handle('projects:new-path', async (_e, rawName: string) => {
+    const name = cleanName(rawName);
+    const problem = nameProblem(name);
+    if (problem) return { error: problem };
+    const dir = boardsDir();
+    await fs.mkdir(dir, { recursive: true });
+    const target = path.join(dir, `${name}.tflow`);
+    if (existsSync(target)) return { error: '같은 이름의 프로젝트가 이미 있습니다.' };
+    return { filePath: allow(target) };
+  });
+
+  ipcMain.handle('projects:rename', async (_e, filePath: string, rawName: string) => {
+    const from = path.resolve(filePath);
+    if (!allowedPaths.has(from)) return { error: '허용되지 않은 파일입니다.' };
+    const name = cleanName(rawName);
+    const problem = nameProblem(name);
+    if (problem) return { error: problem };
+    const to = path.join(path.dirname(from), `${name}${path.extname(from) || '.tflow'}`);
+    if (samePath(from, to) && from === to) return { filePath: from };
+    if (existsSync(to) && !samePath(from, to)) return { error: '같은 이름의 프로젝트가 이미 있습니다.' };
+    await fs.rename(from, to);
+    allow(to);
+    await updateSettings((cur) => ({
+      ...cur,
+      lastFile: cur.lastFile && samePath(cur.lastFile, from) ? to : cur.lastFile,
+      recent: (cur.recent ?? []).map((r) => (samePath(r, from) ? to : r)),
+    }));
+    return { filePath: to };
+  });
+
+  /** 휴지통으로 옮긴다 (확인 후). 완전히 지우지 않으므로 휴지통에서 되살릴 수 있다. */
+  ipcMain.handle('projects:delete', async (_e, filePath: string) => {
+    const target = path.resolve(filePath);
+    if (!allowedPaths.has(target)) return { deleted: false };
+    const r = await dialog.showMessageBox(mainWindow!, {
+      type: 'warning',
+      title: 'ThoughtFlow',
+      message: `‘${path.basename(target, path.extname(target))}’ 프로젝트를 휴지통으로 옮길까요?`,
+      detail: '휴지통에서 다시 꺼낼 수 있습니다.',
+      buttons: ['휴지통으로 이동', '취소'],
+      defaultId: 1,
+      cancelId: 1,
+    });
+    if (r.response !== 0) return { deleted: false };
+    try {
+      await shell.trashItem(target);
+    } catch (err) {
+      await dialog.showMessageBox(mainWindow!, { type: 'error', title: 'ThoughtFlow', message: `휴지통으로 옮기지 못했습니다.\n${String(err)}` });
+      return { deleted: false };
+    }
+    await forgetFile(target);
+    return { deleted: true };
+  });
+
+  ipcMain.handle('projects:reveal', async () => {
+    await fs.mkdir(boardsDir(), { recursive: true });
+    await shell.openPath(boardsDir());
   });
 }
 

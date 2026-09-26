@@ -11,7 +11,8 @@
  *               "pathMode": "straight" | "freehand" | "smoothed" }]  // smoothed = 보정됨
  * }
  * 방향은 sourceNodeId → targetNodeId 로 표현한다.
- * Selection/Highlight 같은 UI 상태는 저장하지 않는다.
+ * Selection/Highlight 같은 순간적인 UI 상태는 저장하지 않는다.
+ * 다만 프로젝트를 오갈 때 "보던 그대로" 돌아오도록 오른쪽 창의 탭 상태는 "ui"에 함께 저장한다 (선택 항목).
  */
 import {
   DEFAULT_BOX_HEIGHT,
@@ -34,12 +35,19 @@ export const FILE_EXTENSION = 'tflow';
 const SIDES: Side[] = ['top', 'right', 'bottom', 'left'];
 const PATH_MODES: PathMode[] = ['straight', 'freehand', 'smoothed'];
 
+/** 프로젝트별로 기억하는 화면 상태 (오른쪽 창의 탭) */
+export interface BoardUiState {
+  tabs: string[];
+  activeTab: string | null;
+  panelOpen: boolean;
+}
+
 const round = (v: number, digits: number) => {
   const k = 10 ** digits;
   return Math.round(v * k) / k;
 };
 
-export function serializeBoard(doc: Doc, viewport: Viewport): string {
+export function serializeBoard(doc: Doc, viewport: Viewport, ui?: BoardUiState): string {
   const data = {
     format: FILE_FORMAT,
     version: FILE_VERSION,
@@ -63,6 +71,7 @@ export function serializeBoard(doc: Doc, viewport: Viewport): string {
       pathPoints: e.pathPoints.map(([u, v]) => [round(u, 5), round(v, 5)]),
       pathMode: e.pathMode,
     })),
+    ...(ui ? { ui: { tabs: ui.tabs.filter((id) => doc.nodes[id]), activeTab: ui.activeTab, panelOpen: ui.panelOpen } } : {}),
   };
   return JSON.stringify(data, null, 2);
 }
@@ -73,7 +82,12 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** 파일 내용을 검증하며 읽는다. 복구 가능한 문제(깨진 Route 등)는 건너뛰고, 치명적이면 예외. */
-export function parseBoard(text: string): { doc: Doc; viewport: Viewport | null; warnings: string[] } {
+export function parseBoard(text: string): {
+  doc: Doc;
+  viewport: Viewport | null;
+  ui: BoardUiState | null;
+  warnings: string[];
+} {
   let data: unknown;
   try {
     data = JSON.parse(text);
@@ -144,5 +158,11 @@ export function parseBoard(text: string): { doc: Doc; viewport: Viewport | null;
       panY: data.board.panY,
     };
   }
-  return { doc: { nodes, edges }, viewport, warnings };
+  let ui: BoardUiState | null = null;
+  if (isObj(data.ui) && Array.isArray(data.ui.tabs)) {
+    const tabs = data.ui.tabs.filter((id): id is string => typeof id === 'string' && !!nodes[id]);
+    const activeTab = typeof data.ui.activeTab === 'string' && tabs.includes(data.ui.activeTab) ? data.ui.activeTab : (tabs[0] ?? null);
+    ui = { tabs, activeTab, panelOpen: data.ui.panelOpen === true && tabs.length > 0 };
+  }
+  return { doc: { nodes, edges }, viewport, ui, warnings };
 }

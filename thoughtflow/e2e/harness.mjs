@@ -26,7 +26,15 @@ export async function launch(extraArgs = [], { sandbox = makeSandbox(), autoPane
   await win.setViewportSize?.({ width: 1280, height: 800 }).catch(() => {});
   await win.waitForSelector('[data-testid=board]');
   // 창 크기 변경이 끝난 뒤에 좌표를 재도록 (도구 막대는 세로 가운데에 붙어 있다)
-  await win.waitForFunction(() => innerWidth === 1280 && innerHeight === 800 && window.__tf.getState().boardSize.height === 800);
+  await win.waitForFunction(() => {
+    const board = document.querySelector('[data-testid=board]');
+    return (
+      innerWidth === 1280 &&
+      innerHeight === 800 &&
+      board.getBoundingClientRect().bottom === 800 &&
+      window.__tf.getState().boardSize.height === board.clientHeight
+    );
+  });
   if (!autoPanel) await win.evaluate(() => window.__tf.getState().setPanelDismissed(true));
   return { app, win, sandbox };
 }

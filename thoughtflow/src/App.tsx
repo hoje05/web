@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
 import { Board } from './components/Board';
-import { SaveStatus } from './components/SaveStatus';
+import { ProjectDrawer } from './components/ProjectDrawer';
 import { SearchBar } from './components/SearchBar';
 import { SidePanel } from './components/SidePanel';
+import { TitleBar } from './components/TitleBar';
 import { Toolbar } from './components/Toolbar';
 import { ZoomControls } from './components/ZoomControls';
 import { runCommand } from './interaction/commands';
 import { useKeyboard } from './interaction/useKeyboard';
-import { desktopApi, fileName, openPath, openStartupBoard, startAutosave } from './persistence/fileService';
+import { desktopApi, openPath, openStartupBoard, projectName, startAutosave } from './persistence/fileService';
 import { useStore } from './store/store';
 
 export function App() {
@@ -17,7 +18,8 @@ export function App() {
   const panelWidth = useStore((s) => s.panelWidth);
 
   useEffect(() => {
-    document.title = `${fileName(filePath)} — ThoughtFlow`;
+    // 작업 표시줄에 보이는 이름
+    document.title = `${projectName(filePath)} — ThoughtFlow`;
   }, [filePath]);
 
   // 자동 저장, 메뉴 명령, 파일 연결(더블클릭)로 전달된 파일, 마지막 보드 다시 열기
@@ -36,13 +38,16 @@ export function App() {
 
   return (
     <div className="app">
-      <SidePanel />
-      <div className="board-area" style={{ right: panelOpen ? panelWidth : 0 }}>
-        <Board />
-        <Toolbar />
-        <ZoomControls />
-        <SearchBar />
-        <SaveStatus />
+      <TitleBar />
+      <div className="app-body">
+        <SidePanel />
+        <div className="board-area" style={{ right: panelOpen ? panelWidth : 0 }}>
+          <Board />
+          <Toolbar />
+          <ZoomControls />
+          <SearchBar />
+        </div>
+        <ProjectDrawer />
       </div>
     </div>
   );

@@ -20,6 +20,7 @@
   --incoming: #a78bfa;
   --match: #f5c451;
   --danger: #f87171;
+  --titlebar-h: 38px;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.4);
   font-family: 'Segoe UI', 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
@@ -44,6 +45,15 @@ body,
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+.app-body {
+  position: absolute;
+  top: var(--titlebar-h);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
 }
 
 /* 오른쪽 창이 열리면 Board 영역은 그 왼쪽을 차지한다 */
@@ -918,32 +928,115 @@ svg.layer {
   cursor: default;
 }
 
-/* ───────────── 자동 저장 상태 ───────────── */
+/* ───────────── 프로그램 바 ───────────── */
 
-.save-status {
+.titlebar {
   position: absolute;
-  left: 14px;
-  bottom: 14px;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--titlebar-h);
   display: flex;
   align-items: center;
-  gap: 7px;
-  max-width: 50%;
-  padding: 4px 8px;
+  background: #0a0b0d;
+  border-bottom: 1px solid var(--panel-border);
+  user-select: none;
+  /* 빈 곳을 끌면 창 이동 */
+  -webkit-app-region: drag;
+  z-index: 50;
+}
+
+.titlebar button {
+  -webkit-app-region: no-drag;
+}
+
+.tb-project {
+  width: 44px;
+  height: 100%;
+  display: grid;
+  place-items: center;
   border: 0;
-  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.tb-project:hover {
+  background: var(--panel-hover);
+}
+
+.tb-project[aria-pressed='true'] {
+  background: var(--panel-2);
+  box-shadow: inset 0 -2px 0 var(--outgoing);
+}
+
+.tb-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding-left: 6px;
+}
+
+.tb-name {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tb-spacer {
+  flex: 1;
+  align-self: stretch;
+}
+
+.tb-controls {
+  display: flex;
+  align-self: stretch;
+}
+
+.tb-btn {
+  width: 46px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tb-btn:hover {
+  background: var(--panel-hover);
+  color: var(--ink);
+}
+
+.tb-close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+/* ───────────── 저장 상태 (프로그램 바 안) ───────────── */
+
+.save-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
   font: inherit;
   font-size: 12px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
-  z-index: 10;
 }
 
 .save-status:hover {
-  background: var(--panel);
+  background: var(--panel-hover);
 }
 
 .save-dot {
@@ -967,6 +1060,257 @@ svg.layer {
   background: var(--danger);
 }
 
-.save-file {
+/* ───────────── 프로젝트 창 (왼쪽에서 스르륵) ───────────── */
+
+.drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+  z-index: 29;
+}
+
+.drawer-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.project-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-right: 1px solid var(--panel-border);
+  box-shadow: 12px 0 32px rgba(0, 0, 0, 0.45);
+  transform: translateX(-102%);
+  visibility: hidden;
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s linear 260ms;
+  z-index: 30;
+}
+
+.project-drawer.is-open {
+  transform: none;
+  visibility: visible;
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 12px 10px 18px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.drawer-icon-btn {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.drawer-icon-btn:hover {
+  background: var(--panel-hover);
+  color: var(--ink);
+}
+
+.drawer-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 6px;
+  padding: 9px 12px;
+  border: 1px dashed var(--box-border-hover);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.drawer-new:hover {
+  background: var(--panel-hover);
+  border-style: solid;
+}
+
+.drawer-new-plus {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--outgoing);
+}
+
+.name-form {
+  display: flex;
+  gap: 6px;
+  margin: 0 12px 6px;
+}
+
+.name-form input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--box-border-hover);
+  border-radius: 8px;
+  outline: none;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.name-form input:focus {
+  border-color: var(--ink);
+}
+
+.name-form button {
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #111214;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.name-form button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.project-list li .name-form {
+  margin: 4px 0;
+}
+
+.drawer-error {
+  margin: 0 14px 6px;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.drawer-section {
+  padding: 12px 18px 6px;
   color: var(--faint);
+  font-size: 11.5px;
+}
+
+.project-list {
+  flex: 1;
+  margin: 0;
+  padding: 0 8px 8px;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.project-list li {
+  position: relative;
+  border-radius: 9px;
+}
+
+.project-list li:hover {
+  background: var(--panel-hover);
+}
+
+.project-list li.is-current {
+  background: var(--panel-2);
+  box-shadow: inset 3px 0 0 var(--outgoing);
+}
+
+.project-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 64px 9px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+}
+
+.project-meta {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.project-actions {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.project-list li:hover .project-actions,
+.project-actions:focus-within {
+  opacity: 1;
+}
+
+.project-empty {
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.drawer-foot {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.drawer-foot button {
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.drawer-foot button:hover {
+  background: var(--panel-hover);
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-drawer,
+  .project-drawer.is-open,
+  .drawer-backdrop {
+    transition: none;
+  }
 }
