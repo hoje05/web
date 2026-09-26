@@ -86,7 +86,7 @@ export function createRoute(doc: Doc, draft: RouteDraft, targetNodeId: string | 
     srcId = newId('n');
     srcSide = sideForDirection(headOut);
     const pos = placeBoxBySide(startPt, srcSide, DEFAULT_BOX_WIDTH, DEFAULT_BOX_HEIGHT);
-    next = addNode(next, { id: srcId, ...roundPos(pos), width: DEFAULT_BOX_WIDTH, height: DEFAULT_BOX_HEIGHT, text: '' });
+    next = addNode(next, { id: srcId, ...roundPos(pos), width: DEFAULT_BOX_WIDTH, height: DEFAULT_BOX_HEIGHT, text: '', note: '' });
     created.push(srcId);
   }
 
@@ -100,7 +100,7 @@ export function createRoute(doc: Doc, draft: RouteDraft, targetNodeId: string | 
     tgtId = newId('n');
     tgtSide = oppositeSide(sideForDirection(headIn));
     const pos = placeBoxBySide(endPt, tgtSide, DEFAULT_BOX_WIDTH, DEFAULT_BOX_HEIGHT);
-    next = addNode(next, { id: tgtId, ...roundPos(pos), width: DEFAULT_BOX_WIDTH, height: DEFAULT_BOX_HEIGHT, text: '' });
+    next = addNode(next, { id: tgtId, ...roundPos(pos), width: DEFAULT_BOX_WIDTH, height: DEFAULT_BOX_HEIGHT, text: '', note: '' });
     created.push(tgtId);
   }
 

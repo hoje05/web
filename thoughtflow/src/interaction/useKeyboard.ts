@@ -22,6 +22,8 @@ function modCommand(e: KeyboardEvent): string | null {
       return 'open';
     case 'KeyN':
       return 'new';
+    case 'KeyF':
+      return 'find';
     case 'Equal':
     case 'NumpadAdd':
       return 'zoomIn';

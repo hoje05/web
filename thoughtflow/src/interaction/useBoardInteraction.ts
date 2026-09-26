@@ -226,6 +226,8 @@ export function useBoardInteraction(boardRef: RefObject<HTMLDivElement | null>) 
         if (!g.moved && g.clearOnClick) s.select(null);
       } else if (g.kind === 'movingNode') {
         if (g.moved) s.commitFrom(g.startDoc);
+        // 그냥 클릭: 왼쪽 창에 이 Box의 생각을 연다 (사용자가 창을 닫아 두었으면 열지 않음)
+        else s.openPage(g.nodeId);
       } else if (g.kind === 'pressArrow') {
         s.reverseEdge(g.edgeId);
         s.select({ kind: 'edge', id: g.edgeId });
@@ -233,8 +235,9 @@ export function useBoardInteraction(boardRef: RefObject<HTMLDivElement | null>) 
         s.setDraft(null);
         const release = worldPoint(e);
         if (!g.moved) {
-          // 그냥 클릭: Box면 선택, 빈 곳이면 선택 해제
+          // 그냥 클릭: Box면 선택(+ 창 열기), 빈 곳이면 선택 해제
           s.select(g.sourceNodeId ? { kind: 'node', id: g.sourceNodeId } : null);
+          if (g.sourceNodeId) s.openPage(g.sourceNodeId);
           return;
         }
         g.points.push(release);
@@ -251,7 +254,9 @@ export function useBoardInteraction(boardRef: RefObject<HTMLDivElement | null>) 
       const p = worldPoint(e);
       const hit = hitTest(s.doc, p, s.viewport.zoom);
       if (hit.kind === 'node-body' || hit.kind === 'node-border') {
-        s.startEditing(hit.nodeId);
+        // 더블클릭: 닫아 둔 창도 다시 열고 메모 입력으로
+        s.select({ kind: 'node', id: hit.nodeId });
+        s.openPage(hit.nodeId, { force: true, focus: 'note' });
       } else if (hit.kind === 'empty') {
         s.addBoxAt(p);
       }

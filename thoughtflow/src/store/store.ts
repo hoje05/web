@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Vec } from '../geometry/vec';
-import { addNode, makeNode, removeEdge, removeNode, setNodeText, updateNode } from '../model/docOps';
+import { addNode, makeNode, removeEdge, removeNode, setNodeNote, setNodeText, updateNode } from '../model/docOps';
 import { newId } from '../model/ids';
 import { EMPTY_DOC, type Doc, type Selection, type Tool, type Viewport } from '../model/types';
 import { getRouteGeometry } from '../routing/routeGeometry';
@@ -29,6 +29,26 @@ export interface AppState extends History {
   /** 그리는 중인 Route (world 좌표) + 놓으면 연결될 Box */
   draft: (RouteDraft & { targetNodeId: string | null }) | null;
 
+  // ── 왼쪽 창 (Box별 생각 메모) ──
+  panelOpen: boolean;
+  /** 사용자가 창을 닫았으면 true → 클릭으로는 다시 열지 않고, 더블클릭으로만 연다 */
+  panelDismissed: boolean;
+  panelWidth: number;
+  /** 창 윗부분에 한 줄로 나열되는 Box 탭 (연 순서) */
+  tabs: string[];
+  activeTab: string | null;
+  /** 창의 제목/메모 입력칸으로 포커스를 옮기라는 요청 (seq가 바뀔 때마다 실행) */
+  panelFocus: { nodeId: string; field: 'title' | 'note'; seq: number } | null;
+
+  // ── 검색 (Ctrl+F) ──
+  searchOpen: boolean;
+  /** Ctrl+F를 누를 때마다 증가 → 검색칸에 다시 포커스 */
+  searchSeq: number;
+  searchQuery: string;
+
+  // ── 자동 저장 상태 ──
+  saveState: 'idle' | 'saving' | 'saved' | 'error';
+
   // ── Doc 변경 (history) ──
   /** 새 Doc을 적용하고 이전 Doc을 Undo 기록에 넣는다 */
   commit: (next: Doc) => void;
@@ -42,11 +62,14 @@ export interface AppState extends History {
   // ── 파일 ──
   resetBoard: () => void;
   loadBoard: (doc: Doc, viewport: Viewport | null, filePath: string) => void;
-  markSaved: (filePath: string, doc: Doc) => void;
+  markSaved: (filePath: string | null, doc: Doc) => void;
 
   // ── 편의 action ──
   addBoxAt: (worldCenter: Vec) => string;
   setText: (id: string, text: string) => void;
+  /** 입력 중 실시간 반영 (Undo 기록은 입력칸을 떠날 때 한 번) */
+  setTextLive: (id: string, text: string) => void;
+  setNoteLive: (id: string, note: string) => void;
   setNodeSize: (id: string, width: number, height: number) => void;
   deleteSelection: () => void;
   reverseEdge: (id: string) => void;
@@ -68,7 +91,26 @@ export interface AppState extends History {
   setBoardSize: (size: { width: number; height: number }) => void;
   setTool: (tool: Tool) => void;
   setSpaceHeld: (held: boolean) => void;
+
+  /** Box의 창을 연다. force가 아니면 사용자가 창을 닫아 둔 상태에서는 열지 않는다. */
+  openPage: (id: string, opts?: { force?: boolean; focus?: 'title' | 'note' }) => void;
+  closePanel: () => void;
+  activateTab: (id: string) => void;
+  closeTab: (id: string) => void;
+  setPanelWidth: (width: number) => void;
+  setPanelDismissed: (dismissed: boolean) => void;
+  /** Box가 보이는 영역 밖이면 화면 가운데로 */
+  ensureVisible: (id: string) => void;
+  centerOn: (id: string) => void;
+
+  openSearch: () => void;
+  closeSearch: () => void;
+  setSearchQuery: (q: string) => void;
+  setSaveState: (s: AppState['saveState']) => void;
 }
+
+export const PANEL_MIN = 300;
+export const PANEL_MAX = 720;
 
 export const useStore = create<AppState>()((set, get) => ({
   doc: EMPTY_DOC,
@@ -85,6 +127,16 @@ export const useStore = create<AppState>()((set, get) => ({
   ghost: null,
   hover: { kind: 'empty' },
   draft: null,
+  panelOpen: false,
+  panelDismissed: false,
+  panelWidth: 400,
+  tabs: [],
+  activeTab: null,
+  panelFocus: null,
+  searchOpen: false,
+  searchSeq: 0,
+  searchQuery: '',
+  saveState: 'idle',
 
   commit: (next) =>
     set((s) => (next === s.doc ? {} : { doc: next, past: pushPast(s.past, s.doc), future: [] })),
@@ -131,7 +183,10 @@ export const useStore = create<AppState>()((set, get) => ({
       draft: null,
       tool: 'select',
       viewport: { zoom: 1, panX: boardSize.width / 2, panY: boardSize.height / 2 },
+      saveState: 'idle',
     });
+    get().closePanel();
+    set({ tabs: [], activeTab: null, panelDismissed: false });
   },
   loadBoard: (doc, viewport, filePath) => {
     set({
@@ -144,7 +199,10 @@ export const useStore = create<AppState>()((set, get) => ({
       editingNodeId: null,
       draft: null,
       tool: 'select',
+      saveState: 'saved',
     });
+    get().closePanel();
+    set({ tabs: [], activeTab: null, panelDismissed: false });
     if (viewport) set({ viewport });
     else get().fitView();
   },
@@ -155,6 +213,7 @@ export const useStore = create<AppState>()((set, get) => ({
     const { doc, commit } = get();
     commit(addNode(doc, makeNode(id, center)));
     set({ selection: { kind: 'node', id }, editingNodeId: id });
+    if (get().panelOpen) get().openPage(id);
     return id;
   },
 
@@ -162,6 +221,8 @@ export const useStore = create<AppState>()((set, get) => ({
     const { doc, commit } = get();
     commit(setNodeText(doc, id, text));
   },
+  setTextLive: (id, text) => set((s) => ({ doc: setNodeText(s.doc, id, text) })),
+  setNoteLive: (id, note) => set((s) => ({ doc: setNodeNote(s.doc, id, note) })),
 
   setNodeSize: (id, width, height) => {
     const node = get().doc.nodes[id];
@@ -178,6 +239,7 @@ export const useStore = create<AppState>()((set, get) => ({
     if (!selection) return;
     commit(selection.kind === 'node' ? removeNode(doc, selection.id) : removeEdge(doc, selection.id));
     set({ selection: null, editingNodeId: null });
+    if (selection.kind === 'node') get().closeTab(selection.id);
   },
 
   reverseEdge: (id) => {
@@ -197,6 +259,7 @@ export const useStore = create<AppState>()((set, get) => ({
     commit(result.doc);
     if (result.editNodeId) {
       set({ selection: { kind: 'node', id: result.editNodeId }, editingNodeId: result.editNodeId });
+      if (get().panelOpen) get().openPage(result.editNodeId);
     } else {
       set({ selection: { kind: 'edge', id: result.edgeId }, editingNodeId: null });
     }
@@ -205,7 +268,10 @@ export const useStore = create<AppState>()((set, get) => ({
   setDraft: (draft) => set({ draft }),
 
   select: (selection) => set({ selection }),
-  startEditing: (id) => set({ selection: { kind: 'node', id }, editingNodeId: id }),
+  startEditing: (id) => {
+    set({ selection: { kind: 'node', id }, editingNodeId: id });
+    if (get().panelOpen) get().openPage(id);
+  },
   stopEditing: () => set({ editingNodeId: null }),
   setGhost: (ghost) => set({ ghost }),
   setHover: (hover) => {
@@ -248,7 +314,106 @@ export const useStore = create<AppState>()((set, get) => ({
     }),
   setTool: (tool) => set({ tool }),
   setSpaceHeld: (spaceHeld) => set({ spaceHeld }),
+
+  openPage: (id, opts = {}) => {
+    const s = get();
+    if (!s.doc.nodes[id]) return;
+    if (!s.panelOpen && s.panelDismissed && !opts.force) return;
+    const tabs = s.tabs.includes(id) ? s.tabs : [...s.tabs, id];
+    if (!s.panelOpen) {
+      // 창이 Board 왼쪽을 차지해도 Board 내용이 화면에서 움직이지 않도록 pan 보정
+      set({
+        panelOpen: true,
+        viewport: { ...s.viewport, panX: s.viewport.panX - s.panelWidth },
+        boardSize: { ...s.boardSize, width: Math.max(1, s.boardSize.width - s.panelWidth) },
+      });
+    }
+    set({
+      tabs,
+      activeTab: id,
+      panelDismissed: false,
+      panelFocus: opts.focus ? { nodeId: id, field: opts.focus, seq: (s.panelFocus?.seq ?? 0) + 1 } : s.panelFocus,
+    });
+    get().ensureVisible(id);
+  },
+  closePanel: () => {
+    const s = get();
+    if (!s.panelOpen) return;
+    set({
+      panelOpen: false,
+      viewport: { ...s.viewport, panX: s.viewport.panX + s.panelWidth },
+      boardSize: { ...s.boardSize, width: s.boardSize.width + s.panelWidth },
+    });
+  },
+  activateTab: (id) => {
+    if (!get().doc.nodes[id]) return get().closeTab(id);
+    set({ activeTab: id, selection: { kind: 'node', id } });
+    get().ensureVisible(id);
+  },
+  closeTab: (id) => {
+    const s = get();
+    const i = s.tabs.indexOf(id);
+    if (i < 0) return;
+    const tabs = s.tabs.filter((t) => t !== id);
+    const activeTab = s.activeTab === id ? (tabs[Math.min(i, tabs.length - 1)] ?? null) : s.activeTab;
+    set({ tabs, activeTab });
+    if (tabs.length === 0) get().closePanel();
+  },
+  setPanelWidth: (width) => {
+    const s = get();
+    const w = Math.round(Math.min(PANEL_MAX, Math.max(PANEL_MIN, width)));
+    const d = w - s.panelWidth;
+    if (!d) return;
+    set({
+      panelWidth: w,
+      ...(s.panelOpen
+        ? {
+            viewport: { ...s.viewport, panX: s.viewport.panX - d },
+            boardSize: { ...s.boardSize, width: Math.max(1, s.boardSize.width - d) },
+          }
+        : {}),
+    });
+  },
+  setPanelDismissed: (panelDismissed) => set({ panelDismissed }),
+  ensureVisible: (id) => {
+    const { doc, viewport: v, boardSize } = get();
+    const n = doc.nodes[id];
+    if (!n) return;
+    const m = 24;
+    // 왼쪽 도구 막대(약 80px)에 가려지는 곳도 "안 보이는" 영역으로 본다
+    const left = 90;
+    const x1 = n.x * v.zoom + v.panX;
+    const y1 = n.y * v.zoom + v.panY;
+    const x2 = (n.x + n.width) * v.zoom + v.panX;
+    const y2 = (n.y + n.height) * v.zoom + v.panY;
+    if (x1 >= left && y1 >= m && x2 <= boardSize.width - m && y2 <= boardSize.height - m) return;
+    get().centerOn(id);
+  },
+  centerOn: (id) => {
+    const { doc, viewport: v, boardSize } = get();
+    const n = doc.nodes[id];
+    if (!n) return;
+    set({
+      viewport: {
+        ...v,
+        panX: boardSize.width / 2 - (n.x + n.width / 2) * v.zoom,
+        panY: boardSize.height / 2 - (n.y + n.height / 2) * v.zoom,
+      },
+    });
+  },
+
+  openSearch: () => set((s) => ({ searchOpen: true, searchSeq: s.searchSeq + 1 })),
+  closeSearch: () => set({ searchOpen: false, searchQuery: '' }),
+  setSearchQuery: (searchQuery) => set({ searchQuery }),
+  setSaveState: (saveState) => set({ saveState }),
 }));
+
+/** 검색어가 Box의 제목이나 메모에 들어 있는지 (대소문자 무시) */
+export function nodeMatches(node: { text: string; note: string }, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+  return node.text.toLowerCase().includes(q) || node.note.toLowerCase().includes(q);
+}
 
 /** 현재 화면 중앙의 world 좌표 */
 export function viewportCenterWorld(): Vec {

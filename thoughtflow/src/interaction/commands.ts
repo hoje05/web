@@ -1,7 +1,7 @@
 /**
  * 단축키와 메뉴가 공유하는 명령.
  */
-import { newBoard, openBoard, saveAndClose, saveBoard } from '../persistence/fileService';
+import { flushAndClose, newBoard, openBoard, saveBoard, saveBoardAs } from '../persistence/fileService';
 import { useStore } from '../store/store';
 import { flushEditing } from './editing';
 
@@ -10,7 +10,8 @@ export type Command =
   | 'open'
   | 'save'
   | 'saveAs'
-  | 'saveAndClose'
+  | 'flushAndClose'
+  | 'find'
   | 'undo'
   | 'redo'
   | 'delete'
@@ -29,9 +30,11 @@ export function runCommand(command: string) {
     case 'save':
       return void saveBoard();
     case 'saveAs':
-      return void saveBoard(true);
-    case 'saveAndClose':
-      return void saveAndClose();
+      return void saveBoardAs();
+    case 'flushAndClose':
+      return void flushAndClose();
+    case 'find':
+      return s.openSearch();
     case 'undo':
       flushEditing();
       return useStore.getState().undo();

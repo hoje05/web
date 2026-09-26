@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { DEFAULT_BOX_HEIGHT, DEFAULT_BOX_WIDTH } from '../model/types';
 import { useBoardInteraction } from '../interaction/useBoardInteraction';
 import { getRouteGeometry } from '../routing/routeGeometry';
-import { useStore } from '../store/store';
+import { nodeMatches, useStore } from '../store/store';
 import { BoxView } from './BoxView';
 import { DraftRoute } from './DraftRoute';
 import { routeRole, type RouteRole } from './highlight';
@@ -40,6 +40,8 @@ export function Board() {
   const hover = useStore((s) => s.hover);
   const ghost = useStore((s) => s.ghost);
   const draft = useStore((s) => s.draft);
+  const searchQuery = useStore((s) => (s.searchOpen ? s.searchQuery.trim() : ''));
+  const activePage = useStore((s) => (s.panelOpen ? s.activeTab : null));
   useBoardInteraction(boardRef);
   const geoms = getRouteGeometry(doc);
   const routes = Object.values(doc.edges)
@@ -61,7 +63,9 @@ export function Board() {
   const { zoom, panX, panY } = viewport;
   const svgTransform = `translate(${panX} ${panY}) scale(${zoom})`;
   const cssTransform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
-  const className = ['board', spaceHeld && 'is-space', tool === 'route' && 'tool-route'].filter(Boolean).join(' ');
+  const className = ['board', spaceHeld && 'is-space', tool === 'route' && 'tool-route', searchQuery && 'is-searching']
+    .filter(Boolean)
+    .join(' ');
   const hoverNodeId = hover.kind === 'node-border' || hover.kind === 'node-body' ? hover.nodeId : null;
 
   return (
@@ -93,6 +97,8 @@ export function Board() {
             editing={editingNodeId === n.id}
             borderHover={hoverNodeId === n.id && (hover.kind === 'node-border' || tool === 'route')}
             dropTarget={draft?.targetNodeId === n.id}
+            search={searchQuery ? (nodeMatches(n, searchQuery) ? 'match' : 'dim') : null}
+            active={activePage === n.id}
           />
         ))}
         {ghost && (

@@ -12,7 +12,10 @@ export interface BoxNode {
   /** DOM에서 측정한 실제 크기. Anchor 계산에 사용한다. */
   width: number;
   height: number;
+  /** Box에 보이는 짧은 내용 (제목) */
   text: string;
+  /** 왼쪽 창에서 쓰는 긴 생각 메모 */
+  note: string;
 }
 
 export interface Anchor {

@@ -11,9 +11,13 @@ interface Props {
   borderHover: boolean;
   /** Route를 그리는 중 이 Box 위에 놓으면 연결됨 */
   dropTarget: boolean;
+  /** 검색 중: 일치(match) / 불일치(dim) / 검색 아님(null) */
+  search: 'match' | 'dim' | null;
+  /** 왼쪽 창에서 보고 있는 Box */
+  active: boolean;
 }
 
-export const BoxView = memo(function BoxView({ node, selected, editing, borderHover, dropTarget }: Props) {
+export const BoxView = memo(function BoxView({ node, selected, editing, borderHover, dropTarget, search, active }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   // 실제 렌더링 크기를 측정해 Doc에 반영 (Anchor 계산용). Undo 기록에는 남기지 않는다.
@@ -33,6 +37,9 @@ export const BoxView = memo(function BoxView({ node, selected, editing, borderHo
     editing && 'is-editing',
     borderHover && 'is-border-hover',
     dropTarget && 'is-drop-target',
+    search === 'match' && 'is-search-match',
+    search === 'dim' && 'is-search-dim',
+    active && 'is-active-page',
   ]
     .filter(Boolean)
     .join(' ');
@@ -52,6 +59,7 @@ export const BoxView = memo(function BoxView({ node, selected, editing, borderHo
           {node.text || <span className="box-placeholder">내용 입력</span>}
         </div>
       )}
+      {node.note.trim() && <span className="box-note-mark" title="메모 있음" />}
       <span className="box-port port-top" />
       <span className="box-port port-right" />
       <span className="box-port port-bottom" />

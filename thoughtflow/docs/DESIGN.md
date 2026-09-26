@@ -207,3 +207,38 @@ Phase 1 기본 구조 · Infinite Board · Zoom/Pan → 2 Box → 3 Box↔Box Ro
 ### 구현 결과 메모
 - 모든 Phase를 순서대로 구현했고, 각 단계마다 `typecheck + vitest + Electron e2e` 통과 후 commit 했다.
 - Windows 설치 파일은 Windows에서 `npm run dist`로 만든다. (Linux에서는 NSIS 단계에 wine이 필요해, 개발 환경에서는 `win-unpacked` 앱 폴더 생성까지 확인)
+
+---
+
+## v0.2 — 왼쪽 창 · 탭 · 검색 · 자동 저장 · 검은색 테마
+
+### 데이터
+- `BoxNode.note: string` 추가 (Box에 보이는 `text`와 별개로, 왼쪽 창에서 쓰는 긴 메모).
+- 파일 형식 `version: 2`. v1 파일은 `note = ''`로 읽는다. v2 파일을 v1 앱이 조용히 잘못 읽지 않도록 버전을 올렸다.
+
+### 왼쪽 창 (SidePanel)
+- 상태: `panelOpen`, `panelDismissed`, `tabs`(연 순서), `activeTab`, `panelWidth`.
+- **클릭** = 창 열기(+ 탭 추가/전환). 사용자가 **×로 닫으면** `panelDismissed = true` → 이후 클릭으로는 열리지 않고 **더블클릭**으로만 다시 열린다(더블클릭은 메모 입력칸에 커서까지).
+  → 창 없이 Board만 보며 작업하고 싶을 때 클릭할 때마다 창이 튀어나오지 않는다.
+- 탭 = 창에서 연 Box들(브라우저 탭처럼). 탭 클릭 → 그 Box의 창으로 전환 + Board에서 선택, ×/휠 버튼으로 닫기. 넘치면 휠로 가로 스크롤.
+- 창은 Board 왼쪽을 차지(docked)한다. 열고 닫거나 너비를 바꿀 때 `panX`를 창 너비만큼 보정해 **Board 내용이 화면에서 움직이지 않는다**. 보고 있는 Box가 창/도구 막대에 가려지면 Board 가운데로 옮긴다.
+- 창 안: 제목(= Box `text`, 실시간 반영), 들어온/나간 흐름 칩(보라/초록, 클릭하면 그 생각으로 이동), 메모.
+- **Undo 묶음**: 입력칸에 머무는 동안의 변경은 live로 반영하고, 입력칸을 떠날 때 시작 시점 Doc을 한 번만 기록 → 글자마다 Undo가 쌓이지 않는다.
+
+### 검색 (Ctrl+F)
+- 제목·메모에서 대소문자 무시 부분 일치. 결과는 위→아래, 왼→오 순.
+- Board: 일치 Box는 노란 테두리, 나머지 Box와 Route는 흐리게. 탭: 일치하는 창에 노란 점.
+- 메모 안 키워드 표시: textarea는 글자 일부만 색칠할 수 없어서, 같은 글꼴/줄바꿈의 **하이라이트 층을 textarea 뒤에** 깔고 스크롤을 동기화한다. 두 층의 줄바꿈 폭이 스크롤바 유무로 어긋나지 않도록 `scrollbar-gutter: stable`.
+- `Enter` = 현재 결과 열기 → 다시 누르면 다음 결과, `Esc` = 닫기(강조 해제).
+
+### 자동 저장
+- Doc이 바뀔 때마다 0.4초 뒤 저장(연속 입력은 하나로 묶임). 파일 쓰기는 한 번에 하나씩, 저장 중 바뀐 내용은 이어서 한 번 더 저장.
+- 이름 없는 보드 → main process가 `문서/ThoughtFlow/생각 흐름 YYYY-MM-DD HH.MM.tflow` 경로를 만들어 준다. 빈 보드는 파일을 만들지 않는다.
+- 마지막 보드 경로를 `userData/settings.json`에 기록 → 다음 실행 때 자동으로 연다(명령행 파일 인자가 우선).
+- 창 닫기: main이 닫기를 잠시 막고 renderer에 마지막 저장을 요청 → 저장 성공 후 닫힘(실패하면 그래도 닫을지 묻는다). 기존 "저장하지 않은 변경" 대화상자는 필요 없어져 제거.
+- 보안: renderer가 쓸 수 있는 경로는 사용자가 대화상자로 고른 파일, 연 파일, 앱이 만든 기본 경로로 제한(allowlist).
+- 테스트는 `THOUGHTFLOW_USER_DATA`, `THOUGHTFLOW_BOARDS_DIR` 환경 변수로 임시 폴더를 쓴다.
+
+### 검은색 테마
+- `nativeTheme.themeSource = 'dark'`(메뉴, 대화상자, Windows 제목 표시줄), CSS `color-scheme: dark`.
+- 색 토큰: 배경 `#0e0f11`, Box `#1a1b1f`, 기본 Route `#7b818a`, 나간 흐름 `#22c55e`, 들어온 흐름 `#a78bfa`, 검색 `#f5c451`. 어두운 배경에 맞춰 glow 불투명도를 약간 올렸다.

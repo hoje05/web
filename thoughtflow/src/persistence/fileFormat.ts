@@ -4,7 +4,7 @@
  * {
  *   "format": "thoughtflow", "version": 1,
  *   "board": { "zoom", "panX", "panY" },
- *   "nodes": [{ "id", "x", "y", "width", "height", "text" }],
+ *   "nodes": [{ "id", "x", "y", "width", "height", "text", "note" }],   // note = 왼쪽 창의 메모 (v2)
  *   "edges": [{ "id", "sourceNodeId", "targetNodeId",
  *               "sourceAnchor": { "side" }, "targetAnchor": { "side" },
  *               "pathPoints": [[u, v], ...],   // Chord 좌표 (source → target 순서)
@@ -27,7 +27,8 @@ import {
 import { MAX_ZOOM, MIN_ZOOM } from '../viewport/viewport';
 
 export const FILE_FORMAT = 'thoughtflow';
-export const FILE_VERSION = 1;
+/** v1: 초기 형식, v2: Box note 추가 (v1 파일도 읽을 수 있다) */
+export const FILE_VERSION = 2;
 export const FILE_EXTENSION = 'tflow';
 
 const SIDES: Side[] = ['top', 'right', 'bottom', 'left'];
@@ -51,6 +52,7 @@ export function serializeBoard(doc: Doc, viewport: Viewport): string {
       width: round(n.width, 1),
       height: round(n.height, 1),
       text: n.text,
+      note: n.note,
     })),
     edges: Object.values(doc.edges).map((e) => ({
       id: e.id,
@@ -98,6 +100,7 @@ export function parseBoard(text: string): { doc: Doc; viewport: Viewport | null;
       width: isNum(raw.width) && raw.width > 0 ? raw.width : DEFAULT_BOX_WIDTH,
       height: isNum(raw.height) && raw.height > 0 ? raw.height : DEFAULT_BOX_HEIGHT,
       text: typeof raw.text === 'string' ? raw.text : '',
+      note: typeof raw.note === 'string' ? raw.note : '',
     };
   }
 

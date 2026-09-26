@@ -85,6 +85,22 @@ try {
   await win.mouse.move(hv.x, hv.y);
   await win.waitForTimeout(150);
   await win.screenshot({ path: 'e2e/out/showcase-4-hover-help.png' });
+  // 6) 왼쪽 창: Box를 클릭해 그 생각을 길게 적기
+  await win.click('button[title="사용법"]');
+  await win.evaluate(() => window.__tf.getState().setPanelDismissed(false));
+  const target = await nodeBy('3개 메뉴만 90% 사용');
+  const tc = await toScreen(win, { x: target.x + target.width / 2, y: target.y + target.height / 2 });
+  await win.mouse.dblclick(tc.x, tc.y);
+  await win.keyboard.type('로그를 보니 대시보드·검색·알림 세 메뉴가 사용의 90%였다.\n나머지 메뉴는 설정 화면 안으로 옮겨도 될 것 같다.\n\n다음에 할 일: 홈 화면을 세 개의 카드로 다시 그려 보기.');
+  await win.keyboard.press('Escape');
+  for (const t of ['사용 로그를 2주간 수집', '홈 화면을 3개 카드로 재설계']) {
+    const n = await nodeBy(t);
+    const p = await toScreen(win, { x: n.x + n.width / 2, y: n.y + n.height / 2 });
+    await win.mouse.click(p.x, p.y);
+  }
+  await win.click('[data-testid=panel-tab]:has-text("3개 메뉴만")');
+  await win.waitForTimeout(150);
+  await win.screenshot({ path: 'e2e/out/showcase-5-panel.png' });
   console.log('showcase done', Object.keys((await state(win)).doc.nodes).length, 'boxes');
 } finally {
   await shutdown(app);

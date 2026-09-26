@@ -4,7 +4,7 @@ import { straightSides, sideForDirection } from '../src/anchors/sideSelection';
 import type { BoxNode, Doc, RouteEdge, Side } from '../src/model/types';
 import { moveNode, reverseRoute } from '../src/routing/routeOps';
 
-const box = (id: string, x: number, y: number): BoxNode => ({ id, x, y, width: 180, height: 60, text: id });
+const box = (id: string, x: number, y: number): BoxNode => ({ id, x, y, width: 180, height: 60, text: id, note: '' });
 const edge = (id: string, s: string, t: string, ss: Side, ts: Side): RouteEdge => ({
   id,
   sourceNodeId: s,

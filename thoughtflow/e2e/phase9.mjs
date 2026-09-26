@@ -67,8 +67,8 @@ try {
 
   // Highlight: B 선택
   await win.mouse.click((await center(Bn)).x, (await center(Bn)).y);
-  const green = 'rgb(22, 163, 74)';
-  const purple = 'rgb(124, 58, 237)';
+  const green = 'rgb(34, 197, 94)';
+  const purple = 'rgb(167, 139, 250)';
   for (const [e, color, name] of [[eBC, green, 'B→C'], [eBD, green, 'B→D'], [eBF, green, 'B→F'], [eAB, purple, 'A→B'], [eEB, purple, 'E→B']]) {
     const st = await routeStyle(e.id);
     assert(st.stroke === color && st.glow, `${name} is ${color === green ? 'green (outgoing)' : 'purple (incoming)'} with glow`);
@@ -80,7 +80,7 @@ try {
   // 선택 해제 → 모두 기본색
   await win.mouse.click(700, 760);
   const normal = await routeStyle(eBC.id);
-  assert(!normal.glow && normal.opacity === '1' && normal.stroke === 'rgb(142, 148, 156)', 'deselect restores neutral color');
+  assert(!normal.glow && normal.opacity === '1' && normal.stroke === 'rgb(123, 129, 138)', 'deselect restores neutral color');
 
   // C 선택 → B→C가 보라(incoming)
   const Cn = (await state(win)).doc.nodes[C.id];

@@ -16,6 +16,7 @@ export function makeNode(id: string, center: { x: number; y: number }): BoxNode 
     width: DEFAULT_BOX_WIDTH,
     height: DEFAULT_BOX_HEIGHT,
     text: '',
+    note: '',
   };
 }
 
@@ -46,6 +47,12 @@ export function setNodeText(doc: Doc, id: string, text: string): Doc {
   const node = doc.nodes[id];
   if (!node || node.text === text) return doc;
   return updateNode(doc, id, { text });
+}
+
+export function setNodeNote(doc: Doc, id: string, note: string): Doc {
+  const node = doc.nodes[id];
+  if (!node || node.note === note) return doc;
+  return updateNode(doc, id, { note });
 }
 
 /** Box와 연결된 Route도 함께 삭제한다 (MVP 정책) */
