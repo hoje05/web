@@ -36,7 +36,7 @@ try {
   s = await state(win);
   const e = Object.values(s.doc.edges)[0];
   const B = s.doc.nodes[e.targetNodeId];
-  assert(e.pathMode === 'freehand' && B.text === '결과', 'board with curved route A → B');
+  assert(e.pathMode === 'smoothed' && B.text === '결과', 'board with curved (auto-corrected) route A → B');
 
   // ── 자동 저장: 이름 없는 보드는 문서/ThoughtFlow(테스트에서는 임시 폴더)에 저절로 저장
   await waitSaved();
@@ -47,20 +47,18 @@ try {
   assert((await win.title()).startsWith('생각 흐름'), `title shows file name (${await win.title()})`);
   assert((await win.textContent('[data-testid=save-status]')).includes('자동 저장됨'), 'save status shows 자동 저장됨');
 
-  // 보정 → Undo → 원래 Raw Path
-  await win.evaluate((id) => window.__tf.getState().select({ kind: 'edge', id }), e.id);
-  await win.click('[data-testid=tool-correct]');
-  s = await state(win);
-  assert(s.doc.edges[e.id].pathMode === 'smoothed', 'route corrected');
+  // Route 생성 Undo/Redo: 1번째 Ctrl+Z = 새 Box 글, 2번째 = Route와 새 Box를 한 번에
+  await win.keyboard.press('Control+z');
+  assert((await state(win)).doc.nodes[B.id]?.text === '', 'first Ctrl+Z undoes the typed text');
   await win.keyboard.press('Control+z');
   s = await state(win);
-  assert(s.doc.edges[e.id].pathMode === 'freehand' && JSON.stringify(s.doc.edges[e.id].pathPoints) === JSON.stringify(e.pathPoints),
-    'Ctrl+Z restores the exact raw path');
+  assert(!s.doc.edges[e.id] && !s.doc.nodes[B.id], 'next Ctrl+Z removes the route and its new box together');
+  await win.keyboard.press('Control+Shift+z');
   await win.keyboard.press('Control+Shift+z');
   s = await state(win);
-  assert(s.doc.edges[e.id].pathMode === 'smoothed', 'Ctrl+Shift+Z redoes correction');
+  assert(s.doc.edges[e.id]?.pathMode === 'smoothed' && s.doc.nodes[B.id]?.text === '결과', 'Ctrl+Shift+Z restores them');
   await waitSaved();
-  assert(readBoard(autoFile).edges[0].pathMode === 'smoothed', 'correction autosaved');
+  assert(readBoard(autoFile).edges[0].pathMode === 'smoothed', 'route autosaved');
 
   // 방향 반전 Undo
   await win.evaluate((id) => window.__tf.getState().reverseEdge(id), e.id);

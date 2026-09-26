@@ -29,8 +29,12 @@ export interface Anchor {
  */
 export type ChordPoint = [number, number];
 
-/** straight = 직선, freehand = 손으로 그린 그대로, smoothed = 보정됨 */
-export type PathMode = 'straight' | 'freehand' | 'smoothed';
+/**
+ * auto     = 두 Box 위치에 맞춰 자동으로 그리는 부드러운 연결선 (Box를 옮기면 항상 이 모드)
+ * smoothed = 그린 곡선을 자동 보정한 것 (Box를 옮기기 전까지 그린 모양 유지)
+ * straight / freehand = 예전 버전 파일 호환용
+ */
+export type PathMode = 'auto' | 'smoothed' | 'straight' | 'freehand';
 
 /**
  * 사용자 용어: Route.

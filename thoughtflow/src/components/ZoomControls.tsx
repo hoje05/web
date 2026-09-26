@@ -52,13 +52,13 @@ const HELP: [string, string][] = [
   ['Box끼리 연결', 'Box 테두리에서 끌어 다른 Box 위에 놓기'],
   ['자유 Route', 'Route 도구(R) → 빈 곳에서 그리기'],
   ['방향 바꾸기', 'Route의 화살표 클릭'],
-  ['흔들린 선 정리', 'Route 선택 → 보정'],
+  ['선 정리', 'Route는 그리면 자동으로 매끈해지고, Box를 옮기면 따라 움직임'],
   ['검색', 'Ctrl+F (제목과 메모에서 찾기)'],
   ['저장', '자동 저장 · 바로 저장 Ctrl+S · 새 프로젝트 Ctrl+N'],
   ['화면 이동', '빈 곳 드래그 · 휠 버튼 · Space+드래그'],
   ['확대/축소', '마우스 휠 · 전체 보기 Shift+1'],
   ['되돌리기', 'Ctrl+Z  /  다시 실행 Ctrl+Y'],
-  ['삭제', 'Delete'],
+  ['삭제', 'Box·Route 우클릭 → 삭제 · Delete'],
 ];
 
 function HelpPanel({ onClose }: { onClose: () => void }) {

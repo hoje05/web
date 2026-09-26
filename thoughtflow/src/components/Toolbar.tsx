@@ -1,18 +1,10 @@
 import { beginBoxPlacement } from '../interaction/boxPlacement';
 import { useStore } from '../store/store';
-import { BoxIcon, CorrectIcon, RouteIcon } from './icons';
+import { BoxIcon, RouteIcon } from './icons';
 
 export function Toolbar() {
   const tool = useStore((s) => s.tool);
   const setTool = useStore((s) => s.setTool);
-  // 보정은 곡선 Route가 선택되었을 때만 의미가 있다
-  const correctable = useStore((s) => {
-    const sel = s.selection;
-    if (sel?.kind !== 'edge') return null;
-    const e = s.doc.edges[sel.id];
-    return e && e.pathMode !== 'straight' ? e.id : null;
-  });
-  const correctEdge = useStore((s) => s.correctEdge);
 
   return (
     // 버튼이 키보드 포커스를 가져가면 Space(Pan)/Enter(편집) 단축키와 충돌하므로 포커스를 주지 않는다
@@ -30,22 +22,11 @@ export function Toolbar() {
         className="tool-button"
         data-testid="tool-route"
         aria-pressed={tool === 'route'}
-        title="Route 그리기 (R)"
+        title="Route 그리기 (R) — 그린 선은 자동으로 매끈하게 정리됩니다"
         onClick={() => setTool(tool === 'route' ? 'select' : 'route')}
       >
         <RouteIcon />
         <span>Route</span>
-      </button>
-      <div className="toolbar-sep" />
-      <button
-        className="tool-button"
-        data-testid="tool-correct"
-        title={correctable ? '선택한 Route의 흔들림을 정리 (Ctrl+Z로 되돌리기)' : '곡선 Route를 선택하면 보정할 수 있습니다'}
-        disabled={!correctable}
-        onClick={() => correctable && correctEdge(correctable)}
-      >
-        <CorrectIcon />
-        <span>보정</span>
       </button>
     </div>
   );

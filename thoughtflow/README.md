@@ -30,7 +30,7 @@ npm start          # 빌드 후 실행
 ### Windows 설치 파일 만들기
 
 ```bash
-npm run dist       # release/ThoughtFlow-Setup-0.3.0.exe 생성
+npm run dist       # release/ThoughtFlow-Setup-0.4.0.exe 생성
 ```
 
 설치하면 `.tflow` 파일을 더블클릭해 바로 열 수 있습니다.
@@ -54,10 +54,11 @@ npm run dist       # release/ThoughtFlow-Setup-0.3.0.exe 생성
 | 자유롭게 Route 그리기 | Toolbar **Route**(`R`) → 빈 곳에서 그리기 → 양 끝에 Box 자동 생성 |
 | 입력하며 흐름 따라가기 | 편집 중 `Tab` = 다음(나가는) Box, `Shift+Tab` = 이전(들어오는) Box |
 | 방향 바꾸기 | Route 가운데의 **화살표 클릭** |
-| 흔들린 선 정리 | Route 클릭해 선택 → Toolbar **보정** (`Ctrl+Z`로 원래 선 복원) |
+| 선 정리 | 따로 할 일 없음 — 그린 선은 **자동으로 매끈하게** 정리되고(큰 곡선은 유지), 거의 곧게 그으면 깔끔한 연결선이 됨 |
+| Box를 옮기면 | 연결된 Route가 **새 위치에 맞게 자동으로 다시 이어짐** (위아래로 놓이면 아래↔위 면, 옆으로 놓이면 오른쪽↔왼쪽 면) |
 | 흐름 추적 | Box를 클릭하면 들어온 Route는 **보라**, 나간 Route는 **초록**으로 강조 |
 | **검색** | `Ctrl+F` → 키워드가 제목이나 메모에 들어 있는 창 목록 표시 · Board에서 해당 Box 강조 · 결과를 누르면 그 창이 열리고 메모 안의 키워드가 표시됨 (`Enter` = 다음 결과, `Esc` = 닫기) |
-| 이동 / 삭제 | Box 본문 드래그 / `Delete` (Box를 지우면 연결된 Route도 삭제) |
+| 이동 / 삭제 | Box 본문 드래그 / Box·Route **우클릭 → 삭제** 또는 `Delete` (Box를 지우면 연결된 Route도 삭제) |
 | 화면 이동 | 빈 곳 드래그 · 휠 버튼 드래그 · `Space`+드래그 |
 | 확대/축소 | 마우스 휠 · `Ctrl +/-/0` · 전체 보기 `Shift+1` |
 | 되돌리기 | `Ctrl+Z` / 다시 실행 `Ctrl+Y` 또는 `Ctrl+Shift+Z` |
@@ -87,11 +88,11 @@ npm run dist       # release/ThoughtFlow-Setup-0.3.0.exe 생성
 
 ![흐름 강조](docs/images/flow-highlight.png)
 
-**보정 전 → 후** (큰 곡선의 의도는 유지하고 손떨림만 제거)
+**자동 보정** — 손떨림은 사라지고 큰 곡선은 남습니다 / **Box를 옮기면** Route가 새 위치에 맞게 다시 이어집니다
 
-| 보정 전 | 보정 후 |
+| 그리자마자 자동 보정 | Box를 옮긴 뒤 |
 |---|---|
-| ![보정 전](docs/images/correct-before.png) | ![보정 후](docs/images/correct-after.png) |
+| ![자동 보정](docs/images/correct-before.png) | ![Box 이동 후](docs/images/correct-after.png) |
 
 ## 구조
 

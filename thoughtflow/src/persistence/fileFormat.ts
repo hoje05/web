@@ -33,7 +33,7 @@ export const FILE_VERSION = 2;
 export const FILE_EXTENSION = 'tflow';
 
 const SIDES: Side[] = ['top', 'right', 'bottom', 'left'];
-const PATH_MODES: PathMode[] = ['straight', 'freehand', 'smoothed'];
+const PATH_MODES: PathMode[] = ['auto', 'smoothed', 'straight', 'freehand'];
 
 /** 프로젝트별로 기억하는 화면 상태 (오른쪽 창의 탭) */
 export interface BoardUiState {
@@ -146,7 +146,7 @@ export function parseBoard(text: string): {
       sourceAnchor: { side: side(r.sourceAnchor) },
       targetAnchor: { side: side(r.targetAnchor) },
       pathPoints,
-      pathMode: pathPoints.length === 0 ? 'straight' : (mode ?? 'freehand'),
+      pathMode: pathPoints.length === 0 ? (mode === 'auto' ? 'auto' : 'straight') : (mode ?? 'freehand'),
     };
   }
 

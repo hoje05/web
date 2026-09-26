@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Board } from './components/Board';
+import { ContextMenu } from './components/ContextMenu';
 import { ProjectDrawer } from './components/ProjectDrawer';
 import { SearchBar } from './components/SearchBar';
 import { SidePanel } from './components/SidePanel';
@@ -46,6 +47,7 @@ export function App() {
           <Toolbar />
           <ZoomControls />
           <SearchBar />
+          <ContextMenu />
         </div>
         <ProjectDrawer />
       </div>

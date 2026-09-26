@@ -2,14 +2,12 @@
  * Route에 대한 Doc 연산 (순수 함수).
  */
 import { sideForDirection, straightSides } from '../anchors/sideSelection';
-import { computeAnchors } from '../anchors/distribution';
-import { reverseChord, toChord } from '../geometry/chord';
+import { reverseChord } from '../geometry/chord';
 import { headingPoint } from '../geometry/curve';
 import { nodeRect, pointOnSide } from '../geometry/rect';
 import { sub } from '../geometry/vec';
 import { setNodePosition, updateEdge } from '../model/docOps';
 import type { Doc, RouteEdge, Side } from '../model/types';
-import { correctPath } from './correct';
 import { edgeWorldPoints } from './edgePath';
 
 /** 방향 반전: source/target과 anchor를 맞바꾸고 경로 점을 역순 변환. 모양은 그대로. */
@@ -33,7 +31,9 @@ export function preferredSides(doc: Doc, edge: RouteEdge): [Side, Side] {
   if (!a || !b) return current;
   const ra = nodeRect(a);
   const rb = nodeRect(b);
-  if (edge.pathMode === 'straight' || edge.pathPoints.length === 0) return straightSides(ra, rb, current);
+  if (edge.pathMode === 'auto' || edge.pathMode === 'straight' || edge.pathPoints.length === 0) {
+    return straightSides(ra, rb, current);
+  }
 
   // 곡선: 경로의 시작/끝 접선 방향으로 판단 (Anchor는 면 중앙으로 근사)
   const pts = edgeWorldPoints(edge, pointOnSide(ra, current[0], 0.5), pointOnSide(rb, current[1], 0.5));
@@ -55,29 +55,29 @@ export function refreshSides(doc: Doc, nodeIds: Set<string>): Doc {
   return next;
 }
 
-/** Box 이동 + 연결된 Route의 Anchor 면 갱신. 곡선 형태는 Chord 좌표 덕분에 자동으로 유지된다. */
-export function moveNode(doc: Doc, id: string, x: number, y: number): Doc {
-  const moved = setNodePosition(doc, id, x, y);
-  if (moved === doc) return doc;
-  return refreshSides(moved, new Set([id]));
-}
-
 /**
- * 보정: 현재 화면에 보이는 경로를 정리해 pathPoints/pathMode만 교체한다.
- * source/target/anchor/방향은 건드리지 않으므로 연결이 깨지지 않는다.
+ * Box 이동. 연결된 Route는 처음 그린 모양을 고집하지 않고 자동 연결선(auto)으로 바뀌어,
+ * 두 Box의 새 위치에 어울리는 면에 붙고 부드러운 곡선으로 다시 이어진다.
+ * (드래그 중 면이 깜빡이지 않도록 이미 auto인 Route는 hysteresis로 면을 유지)
  */
-export function correctRoute(doc: Doc, id: string): Doc {
-  const edge = doc.edges[id];
-  const anchors = computeAnchors(doc).get(id);
-  if (!edge || !anchors || edge.pathMode === 'straight') return doc;
-  const world = edgeWorldPoints(edge, anchors.source, anchors.target);
-  const res = correctPath(world);
-  if (res.straight) {
-    const straightened = updateEdge(doc, id, { pathMode: 'straight', pathPoints: [] });
-    const [s, t] = preferredSides(straightened, straightened.edges[id]);
-    return updateEdge(straightened, id, { sourceAnchor: { side: s }, targetAnchor: { side: t } });
+export function moveNode(doc: Doc, id: string, x: number, y: number): Doc {
+  let next = setNodePosition(doc, id, x, y);
+  if (next === doc) return doc;
+  for (const e of Object.values(next.edges)) {
+    if (e.sourceNodeId !== id && e.targetNodeId !== id) continue;
+    const a = next.nodes[e.sourceNodeId];
+    const b = next.nodes[e.targetNodeId];
+    if (!a || !b) continue;
+    const fresh = e.pathMode !== 'auto';
+    const [s, t] = straightSides(nodeRect(a), nodeRect(b), fresh ? null : [e.sourceAnchor.side, e.targetAnchor.side]);
+    if (fresh || s !== e.sourceAnchor.side || t !== e.targetAnchor.side) {
+      next = updateEdge(next, e.id, {
+        pathMode: 'auto',
+        pathPoints: [],
+        sourceAnchor: { side: s },
+        targetAnchor: { side: t },
+      });
+    }
   }
-  const s = res.points[0];
-  const e = res.points[res.points.length - 1];
-  return updateEdge(doc, id, { pathMode: 'smoothed', pathPoints: toChord(res.points.slice(1, -1), s, e) });
+  return next;
 }

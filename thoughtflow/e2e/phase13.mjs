@@ -15,7 +15,7 @@ try {
   await drag(win, await toScreen(win, { x: A.x + A.width - 2, y: A.y + A.height / 2 }), await center(C), { steps: 20 });
   let s = await state(win);
   const e = Object.values(s.doc.edges)[0];
-  assert(e.pathMode === 'straight', 'horizontal straight route');
+  assert(e.pathMode === 'auto', 'horizontal route (auto connector)');
 
   // 1) 완전한 수평선에서도 glow가 보여야 함 (filter 영역 높이 > 0)
   await win.mouse.click((await center(A)).x, (await center(A)).y);

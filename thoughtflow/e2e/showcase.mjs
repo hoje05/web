@@ -62,13 +62,7 @@ try {
 
   // 3) 흔들린 Route 선택 → 보정
   s = await state(win);
-  const wobbly = Object.values(s.doc.edges).find((e) => e.pathMode === 'freehand' && s.doc.nodes[e.targetNodeId].text.startsWith('홈') && s.doc.nodes[e.sourceNodeId].text.startsWith('3개'));
-  for (const e of Object.values(s.doc.edges)) {
-    if (e.pathMode === 'freehand') {
-      await win.evaluate((id) => window.__tf.getState().select({ kind: 'edge', id }), e.id);
-      await win.click('[data-testid=tool-correct]');
-    }
-  }
+  const wobbly = Object.values(s.doc.edges).find((e) => s.doc.nodes[e.targetNodeId].text.startsWith('홈') && s.doc.nodes[e.sourceNodeId].text.startsWith('3개'));
   await win.evaluate((id) => window.__tf.getState().select({ kind: 'edge', id }), wobbly.id);
   await win.screenshot({ path: 'e2e/out/showcase-2-corrected.png' });
 

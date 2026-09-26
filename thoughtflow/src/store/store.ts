@@ -7,7 +7,7 @@ import { getRouteGeometry } from '../routing/routeGeometry';
 import { fitBounds, screenToWorld, zoomAt } from '../viewport/viewport';
 import type { Hit } from '../interaction/hitTest';
 import { createRoute, type RouteDraft } from '../routing/createRoute';
-import { correctRoute, reverseRoute } from '../routing/routeOps';
+import { reverseRoute } from '../routing/routeOps';
 import type { BoardUiState } from '../persistence/fileFormat';
 import { pushPast, type History } from './history';
 
@@ -50,6 +50,10 @@ export interface AppState extends History {
   // ── 자동 저장 상태 ──
   saveState: 'idle' | 'saving' | 'saved' | 'error';
 
+  /** 우클릭 메뉴 (Board 영역 기준 화면 좌표) */
+  contextMenu: { x: number; y: number; target: 'node' | 'edge' } | null;
+  setContextMenu: (menu: AppState['contextMenu']) => void;
+
   // ── 프로젝트 창 (왼쪽에서 스르륵) ──
   drawerOpen: boolean;
   /** 열 때 바로 "새 프로젝트" 이름 입력칸을 보여 줄지 */
@@ -82,7 +86,6 @@ export interface AppState extends History {
   setNodeSize: (id: string, width: number, height: number) => void;
   deleteSelection: () => void;
   reverseEdge: (id: string) => void;
-  correctEdge: (id: string) => void;
   /** 그린 경로로 Route(필요하면 새 Box까지) 생성. 성공하면 true */
   finishRoute: (draft: RouteDraft, targetNodeId: string | null) => boolean;
   setDraft: (draft: AppState['draft']) => void;
@@ -147,6 +150,8 @@ export const useStore = create<AppState>()((set, get) => ({
   searchQuery: '',
   saveState: 'idle',
   drawerOpen: false,
+  contextMenu: null,
+  setContextMenu: (contextMenu) => set({ contextMenu }),
   drawerCreate: false,
   setDrawer: (drawerOpen, drawerCreate = false) => set({ drawerOpen, drawerCreate: drawerOpen && drawerCreate }),
 
@@ -197,6 +202,8 @@ export const useStore = create<AppState>()((set, get) => ({
       viewport: { zoom: 1, panX: boardSize.width / 2, panY: boardSize.height / 2 },
       saveState: 'idle',
   drawerOpen: false,
+  contextMenu: null,
+  setContextMenu: (contextMenu) => set({ contextMenu }),
   drawerCreate: false,
   setDrawer: (drawerOpen, drawerCreate = false) => set({ drawerOpen, drawerCreate: drawerOpen && drawerCreate }),
     });
@@ -274,10 +281,6 @@ export const useStore = create<AppState>()((set, get) => ({
     commit(reverseRoute(doc, id));
   },
 
-  correctEdge: (id) => {
-    const { doc, commit } = get();
-    commit(correctRoute(doc, id));
-  },
 
   finishRoute: (draft, targetNodeId) => {
     const { doc, commit, viewport } = get();

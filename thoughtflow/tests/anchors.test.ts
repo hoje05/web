@@ -75,6 +75,14 @@ describe('route ops', () => {
     expect(doc.edges.e.sourceAnchor.side).toBe('bottom');
     expect(doc.edges.e.targetAnchor.side).toBe('top');
   });
+  it('moving a box turns a drawn curve into an auto connector that fits the new position', () => {
+    const curved: RouteEdge = { ...edge('e', 'A', 'B', 'top', 'top'), pathPoints: [[0.5, -0.8]], pathMode: 'smoothed' };
+    const doc = moveNode(docOf([box('A', 0, 0), box('B', 400, 0)], [curved]), 'B', 400, 20);
+    expect(doc.edges.e.pathMode).toBe('auto');
+    expect(doc.edges.e.pathPoints).toEqual([]);
+    expect([doc.edges.e.sourceAnchor.side, doc.edges.e.targetAnchor.side]).toEqual(['right', 'left']);
+  });
+
   it('reverse swaps endpoints and anchors', () => {
     const doc = reverseRoute(docOf([box('A', 0, 0), box('B', 400, 0)], [edge('e', 'A', 'B', 'right', 'left')]), 'e');
     expect(doc.edges.e.sourceNodeId).toBe('B');

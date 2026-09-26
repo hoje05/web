@@ -267,3 +267,13 @@ Phase 1 기본 구조 · Infinite Board · Zoom/Pan → 2 Box → 3 Box↔Box Ro
 ### 프로젝트 창 (ProjectDrawer)
 - 프로그램 바 왼쪽 위 버튼 또는 `Ctrl+N`(바로 이름 입력). 왼쪽에서 `transform: translateX` 260ms 애니메이션으로 미끄러져 나오고, 뒤 Board는 어둡게 덮인다(바깥 클릭·Esc로 닫힘, 그 클릭은 Board에 전달되지 않음). 움직임 줄이기 설정(`prefers-reduced-motion`)이면 애니메이션 없이.
 - 창이 열려 있는 동안 Board 단축키(Delete, Enter, R, Space)는 쉰다.
+
+---
+
+## v0.4 — 우클릭 삭제 · 항상 자동 보정 · Box 이동 시 자동 재연결
+
+- **우클릭 메뉴**: Box·Route 위에서 우클릭 → 선택되고 "Box 삭제"/"Route 삭제" 메뉴. Box 삭제는 연결된 Route도 함께. Esc·바깥 클릭·창 크기 변경으로 닫힘. 화면 가장자리에서 잘리지 않게 위치 보정. Undo 가능.
+- **보정 버튼 제거, 항상 자동 보정**: Route를 그리면 바로 `correctPath`(재샘플링 → Gaussian smoothing → RDP)를 거쳐 저장한다(`pathMode: 'smoothed'`). 거의 곧은 선은 `auto`.
+- **새 path mode `auto`**: 두 Box의 연결 면에서 수직으로 뻗어 나가는 cubic Bezier(제어점 거리 = 두 끝점 거리의 42%, 24~180px). 면은 두 Box의 가로/세로 간격으로 고르고(hysteresis 포함), 같은 면의 여러 Route는 기존처럼 균등 분배.
+- **Box 이동**: 연결된 Route는 그린 모양(닮음 변환)을 유지하던 방식을 버리고 `auto`로 바뀐다. 처음 바뀔 때는 면을 새로 고르고, 이후 드래그 중에는 hysteresis로 면이 깜빡이지 않게 한다. → Box를 어디로 옮겨도 선이 그 위치에 어울리는 면에 붙어 자연스럽게 이어진다.
+- 파일 형식은 그대로(`pathMode`에 `auto` 값 추가, 예전 `straight`/`freehand` 파일도 읽음).

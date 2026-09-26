@@ -262,6 +262,25 @@ export function useBoardInteraction(boardRef: RefObject<HTMLDivElement | null>) 
       }
     };
 
+    // 우클릭: Box·Route 위라면 선택하고 삭제 메뉴를 띄운다
+    const onContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      if (isInsideEditor(e.target) || gesture.kind !== 'idle') return;
+      flushEditing();
+      const s = useStore.getState();
+      const hit = hitTest(s.doc, worldPoint(e), s.viewport.zoom);
+      const p = localPoint(e);
+      if (hit.kind === 'node-body' || hit.kind === 'node-border') {
+        s.select({ kind: 'node', id: hit.nodeId });
+        s.setContextMenu({ x: p.x, y: p.y, target: 'node' });
+      } else if (hit.kind === 'edge' || hit.kind === 'arrow') {
+        s.select({ kind: 'edge', id: hit.edgeId });
+        s.setContextMenu({ x: p.x, y: p.y, target: 'edge' });
+      } else {
+        s.setContextMenu(null);
+      }
+    };
+
     const onPointerLeave = () => useStore.getState().setHover({ kind: 'empty' });
 
     const onWheel = (e: WheelEvent) => {
@@ -285,6 +304,7 @@ export function useBoardInteraction(boardRef: RefObject<HTMLDivElement | null>) 
     board.addEventListener('pointercancel', endGesture);
     board.addEventListener('pointerleave', onPointerLeave);
     board.addEventListener('dblclick', onDoubleClick);
+    board.addEventListener('contextmenu', onContextMenu);
     board.addEventListener('wheel', onWheel, { passive: false });
     board.addEventListener('mousedown', onMouseDown);
     return () => {
@@ -294,6 +314,7 @@ export function useBoardInteraction(boardRef: RefObject<HTMLDivElement | null>) 
       board.removeEventListener('pointercancel', endGesture);
       board.removeEventListener('pointerleave', onPointerLeave);
       board.removeEventListener('dblclick', onDoubleClick);
+      board.removeEventListener('contextmenu', onContextMenu);
       board.removeEventListener('wheel', onWheel);
       board.removeEventListener('mousedown', onMouseDown);
     };

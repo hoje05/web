@@ -10,10 +10,11 @@ import {
   polylineLength,
   polylineToPathD,
   sampleBeziers,
+  type Bezier,
 } from '../geometry/curve';
-import { expandRect, nodeRect, rectContains, type Rect } from '../geometry/rect';
-import type { Vec } from '../geometry/vec';
-import type { Doc, RouteEdge } from '../model/types';
+import { expandRect, nodeRect, rectContains, sideNormal, type Rect } from '../geometry/rect';
+import { clamp, dist, type Vec } from '../geometry/vec';
+import type { Doc, RouteEdge, Side } from '../model/types';
 import { edgeWorldPoints } from './edgePath';
 
 export interface RouteGeom {
@@ -30,10 +31,24 @@ export interface RouteGeom {
   bbox: Rect;
 }
 
-export function buildRouteGeom(id: string, pts: Vec[]): RouteGeom {
+/**
+ * 자동 연결선: 양 끝에서 연결 면에 수직으로 뻗어 나가 부드럽게 만나는 cubic Bezier.
+ * Box가 어디로 움직이든 그 위치에 어울리는 모양이 된다.
+ */
+export function autoBezier(s: Vec, sSide: Side, e: Vec, eSide: Side): Bezier {
+  const k = clamp(dist(s, e) * 0.42, 24, 180);
+  const ns = sideNormal(sSide);
+  const ne = sideNormal(eSide);
+  return { p0: s, c1: { x: s.x + ns.x * k, y: s.y + ns.y * k }, c2: { x: e.x + ne.x * k, y: e.y + ne.y * k }, p3: e };
+}
+
+export function buildRouteGeom(id: string, pts: Vec[], bezier?: Bezier): RouteGeom {
   let d: string;
   let polyline: Vec[];
-  if (pts.length <= 2) {
+  if (bezier) {
+    d = beziersToPathD([bezier]);
+    polyline = sampleBeziers([bezier]);
+  } else if (pts.length <= 2) {
     d = polylineToPathD(pts);
     polyline = pts;
   } else {
@@ -102,7 +117,10 @@ export function computeRouteGeometry(doc: Doc): Map<string, RouteGeom> {
     const key = `${a.source.x},${a.source.y},${a.target.x},${a.target.y}`;
     let entry = edgeCache.get(edge.id);
     if (!entry || entry.edge !== edge || entry.key !== key) {
-      const base = buildRouteGeom(edge.id, edgeWorldPoints(edge, a.source, a.target));
+      const base =
+        edge.pathMode === 'auto'
+          ? buildRouteGeom(edge.id, [a.source, a.target], autoBezier(a.source, edge.sourceAnchor.side, a.target, edge.targetAnchor.side))
+          : buildRouteGeom(edge.id, edgeWorldPoints(edge, a.source, a.target));
       entry = { edge, key, base, placed: base };
       edgeCache.set(edge.id, entry);
     }

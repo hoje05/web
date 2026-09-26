@@ -13,7 +13,7 @@ import { sub, type Vec } from '../geometry/vec';
 import { addEdge, addNode } from '../model/docOps';
 import { newId } from '../model/ids';
 import { DEFAULT_BOX_HEIGHT, DEFAULT_BOX_WIDTH, type Doc, type RouteEdge, type Side } from '../model/types';
-import { cleanDrawnPath } from './correct';
+import { cleanDrawnPath, correctPath } from './correct';
 
 export interface RouteDraft {
   /** 기존 Box에서 시작했으면 그 id, 빈 곳에서 시작했으면 null */
@@ -63,9 +63,16 @@ export function createRoute(doc: Doc, draft: RouteDraft, targetNodeId: string | 
   if (polylineLength(pts) * zoom < MIN_ROUTE_SCREEN_LENGTH) return null;
 
   // 2) 자동 정리: 중복점 제거, 거의 곧은 선은 완전한 직선으로
+  // 항상 자동 보정: 손떨림·지그재그를 없애고 큰 곡선만 남긴다. 거의 곧으면 자동 연결선.
   const cleaned = cleanDrawnPath(pts, zoom);
-  pts = cleaned.points;
-  const straight = cleaned.straight;
+  let straight = cleaned.straight;
+  if (straight) {
+    pts = cleaned.points;
+  } else {
+    const corrected = correctPath(cleaned.points);
+    straight = corrected.straight;
+    pts = corrected.points;
+  }
 
   const startPt = pts[0];
   const endPt = pts[pts.length - 1];
@@ -120,7 +127,7 @@ export function createRoute(doc: Doc, draft: RouteDraft, targetNodeId: string | 
     targetAnchor: { side: tgtSide },
     // 곡선 내부 점은 "그린 경로의 양 끝"을 기준으로 정규화 → 실제 Anchor에 닮음 변환되어 그대로 표시된다
     pathPoints: straight ? [] : toChord(pts.slice(1, -1), startPt, endPt),
-    pathMode: straight ? 'straight' : 'freehand',
+    pathMode: straight ? 'auto' : 'smoothed',
   };
   next = addEdge(next, edge);
 
