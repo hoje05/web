@@ -54,6 +54,15 @@ export interface AppState extends History {
   contextMenu: { x: number; y: number; target: 'node' | 'edge' } | null;
   setContextMenu: (menu: AppState['contextMenu']) => void;
 
+  // ── AI 연결 ──
+  /** AI가 마지막으로 보드를 바꾼 내용 (알림 + 되돌리기). before = 바꾸기 직전 Doc (Undo 기록의 맨 위) */
+  aiActivity: { seq: number; message: string; before: Doc } | null;
+  /** AI가 방금 만든 Box (잠깐 빛나게) */
+  aiFlash: string[];
+  /** AI 연결 설정 창 */
+  aiSettingsOpen: boolean;
+  setAiSettingsOpen: (open: boolean) => void;
+
   // ── 프로젝트 창 (왼쪽에서 스르륵) ──
   drawerOpen: boolean;
   /** 열 때 바로 "새 프로젝트" 이름 입력칸을 보여 줄지 */
@@ -152,6 +161,10 @@ export const useStore = create<AppState>()((set, get) => ({
   drawerOpen: false,
   contextMenu: null,
   setContextMenu: (contextMenu) => set({ contextMenu }),
+  aiActivity: null,
+  aiFlash: [],
+  aiSettingsOpen: false,
+  setAiSettingsOpen: (aiSettingsOpen) => set({ aiSettingsOpen }),
   drawerCreate: false,
   setDrawer: (drawerOpen, drawerCreate = false) => set({ drawerOpen, drawerCreate: drawerOpen && drawerCreate }),
 
@@ -201,17 +214,18 @@ export const useStore = create<AppState>()((set, get) => ({
       tool: 'select',
       viewport: { zoom: 1, panX: boardSize.width / 2, panY: boardSize.height / 2 },
       saveState: 'idle',
-  drawerOpen: false,
-  contextMenu: null,
-  setContextMenu: (contextMenu) => set({ contextMenu }),
-  drawerCreate: false,
-  setDrawer: (drawerOpen, drawerCreate = false) => set({ drawerOpen, drawerCreate: drawerOpen && drawerCreate }),
+      drawerOpen: false,
+      contextMenu: null,
+      aiActivity: null,
+      aiFlash: [],
     });
     get().closePanel();
     set({ tabs: [], activeTab: null, panelDismissed: false });
   },
   loadBoard: (doc, viewport, filePath, ui) => {
     set({
+      aiActivity: null,
+      aiFlash: [],
       doc,
       savedDoc: doc,
       filePath,

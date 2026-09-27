@@ -59,6 +59,7 @@ const HELP: [string, string][] = [
   ['확대/축소', '마우스 휠 · 전체 보기 Shift+1'],
   ['되돌리기', 'Ctrl+Z  /  다시 실행 Ctrl+Y'],
   ['삭제', 'Box·Route 우클릭 → 삭제 · Delete'],
+  ['AI 연결', '프로그램 바의 AI 버튼 → Claude·ChatGPT가 대화를 보드에 정리'],
 ];
 
 function HelpPanel({ onClose }: { onClose: () => void }) {

@@ -1,4 +1,7 @@
 import { useEffect } from 'react';
+import { handleAiRequest } from './ai/aiBridge';
+import { AiSettings } from './components/AiSettings';
+import { AiToast } from './components/AiToast';
 import { Board } from './components/Board';
 import { ContextMenu } from './components/ContextMenu';
 import { ProjectDrawer } from './components/ProjectDrawer';
@@ -29,11 +32,15 @@ export function App() {
     if (!desktopApi) return stopAutosave;
     const offMenu = desktopApi.onMenuCommand(runCommand);
     const offOpen = desktopApi.onOpenPath((p) => void openPath(p));
-    void openStartupBoard();
+    // Claude·ChatGPT의 요청 → 보드. 마지막 보드를 불러온 뒤부터 받는다.
+    const api = desktopApi;
+    const offAi = api.onAiRequest((req) => void handleAiRequest(req).then((res) => api.aiRespond(req.id, res)));
+    void openStartupBoard().finally(() => api.aiReady());
     return () => {
       stopAutosave();
       offMenu();
       offOpen();
+      offAi();
     };
   }, []);
 
@@ -48,8 +55,10 @@ export function App() {
           <ZoomControls />
           <SearchBar />
           <ContextMenu />
+          <AiToast />
         </div>
         <ProjectDrawer />
+        <AiSettings />
       </div>
     </div>
   );

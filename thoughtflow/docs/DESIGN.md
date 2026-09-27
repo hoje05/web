@@ -277,3 +277,61 @@ Phase 1 기본 구조 · Infinite Board · Zoom/Pan → 2 Box → 3 Box↔Box Ro
 - **새 path mode `auto`**: 두 Box의 연결 면에서 수직으로 뻗어 나가는 cubic Bezier(제어점 거리 = 두 끝점 거리의 42%, 24~180px). 면은 두 Box의 가로/세로 간격으로 고르고(hysteresis 포함), 같은 면의 여러 Route는 기존처럼 균등 분배.
 - **Box 이동**: 연결된 Route는 그린 모양(닮음 변환)을 유지하던 방식을 버리고 `auto`로 바뀐다. 처음 바뀔 때는 면을 새로 고르고, 이후 드래그 중에는 hysteresis로 면이 깜빡이지 않게 한다. → Box를 어디로 옮겨도 선이 그 위치에 어울리는 면에 붙어 자연스럽게 이어진다.
 - 파일 형식은 그대로(`pathMode`에 `auto` 값 추가, 예전 `straight`/`freehand` 파일도 읽음).
+
+## v0.5 — AI 연결 (방식 A: 구독 계정 그대로, MCP)
+
+사용자가 이미 쓰는 Claude 데스크톱·ChatGPT 계정으로 이 앱을 제어한다. API 키도, 앱 안의 별도 채팅창도 없다.
+AI 쪽 대화 화면은 각 서비스의 것을 그대로 쓰고, ThoughtFlow는 **MCP 서버**로 보드를 읽고 고치는 도구를 제공한다.
+
+```
+Claude 데스크톱 ─stdio─▶ 확장(.mcpb, mcp/stdio.ts) ─HTTP 127.0.0.1 + 토큰─▶ 로컬 브리지 ─┐
+ChatGPT ─HTTPS─▶ cloudflared 빠른 터널 ─▶ /mcp/<비밀 경로> (Streamable HTTP, stateless) ─┼─▶ IPC ─▶ renderer ─▶ store
+                                                                         (electron/ai.ts) ┘      (src/ai/aiBridge.ts)
+```
+
+### 도구 (mcp/server.ts — 두 경로가 같은 정의를 씀)
+| 도구 | 하는 일 |
+|---|---|
+| `get_board` | 열린 프로젝트를 들여쓰기 흐름(시작 Box → 나가는 Route 순)으로. id·메모·"사용자가 보고 있는 Box" 포함. 순환/합류는 "(위에 나옴)" |
+| `read_box` / `search_boxes` | Box 하나의 전체 메모와 앞뒤 흐름 / 제목·메모 검색(모든 단어 포함) |
+| `add_flow` | 여러 Box + Route를 한 번에 (= Undo 한 번). routes를 생략하면 순서대로 한 줄, `after`면 기존 Box 뒤에 붙임. 참조가 하나라도 틀리면 아무것도 바꾸지 않음 |
+| `update_box` / `connect_boxes` | 제목·메모 고치기(`append_note` 권장) / 기존 Box 잇기 |
+| `delete_items` | 설정에서 허용했을 때만 (기본 꺼짐) |
+| `focus_box` | 앱 화면에서 그 Box를 선택·가운데·오른쪽 창으로 보여 줌 |
+| `list_projects` / `open_project` / `create_project` | 프로젝트 전환·생성 |
+
+서버 `instructions`에 사용 규칙을 적어 둔다: 대화 전에 `get_board`로 보드를 근거로 삼고, 대화에서 나온 생각·결정·행동·결과는 짧은 제목의
+Box로 기존 흐름에 이어 붙이며, 사용자의 글은 요청 없이 지우거나 덮어쓰지 않는다. Claude용 프롬프트 두 개(대화 정리하기, 보드 바탕으로 이야기하기)도 제공.
+Box는 id로 가리키지만 보드에 하나뿐인 정확한 제목도 받아 준다 (AI가 id를 틀려도 복구되게).
+
+### 자동 배치 (src/ai/layout.ts)
+- 흐름은 왼쪽 → 오른쪽. 앞 Box 오른쪽 열(간격 90px)에, 같은 앞 Box의 둘째 자식부터는 아래로(간격 36px). 기존 자식이 있으면 그 아래.
+- 뒤 Box에만 이어지면 그 왼쪽 열. 이어진 곳이 없는 새 흐름은 기존 내용 아래(빈 보드면 화면 가운데).
+- 겹치면 0, +1, −1, +2 … 칸씩 비켜 빈자리를 찾는다. 크기는 글 길이로 어림(폭 180~300, 한글 14px/영문 7.6px)하고, 그려진 뒤 실제 크기로 측정된다.
+- 연결선은 `auto` 모드(v0.4)라 이후 사용자가 Box를 옮겨도 자연스럽게 따라간다.
+
+### 앱 화면 쪽 (src/ai/aiBridge.ts)
+- 요청은 하나씩 차례로 처리(프로젝트 전환 중 끼어들기 방지). 보드를 바꾸는 요청 하나 = `commit` 한 번 = Undo 한 번. 자동 저장은 평소대로.
+- AI가 만든 Box에는 `origin`("Claude"/"ChatGPT")을 저장하고 테두리 위에 작은 표시. 방금 만든 Box는 2.4초 빛나고, 모두 화면 밖이면 첫 Box로 화면 이동.
+- 아래쪽 알림 "Claude: Box 3개와 Route 2개를 추가했습니다." + **되돌리기**(Undo 기록의 맨 위가 그 AI 변경일 때만 — 새 Box 크기 측정은 Doc만 바꾸고 기록은 안 바꾸므로 영향 없음).
+- main은 화면이 마지막 보드를 불러온 뒤(`ai:ready`)부터 요청을 넘긴다. 창을 새로 불러오면 다시 준비될 때까지 기다린다.
+
+### 보안
+- 로컬 브리지: 127.0.0.1에서만, 실행마다 새 48자 토큰(`bridge.json`, 사용자 데이터 폴더). Host가 정확히 그 주소가 아니거나 Origin 헤더가 있으면(브라우저·DNS rebinding) 거절.
+- ChatGPT: 설정에서 켤 때만 열고, 비밀 경로(128비트)가 틀리면 404. "주소 새로 만들기"로 즉시 바꿀 수 있다. 터널을 끄면 공개 주소도 사라진다.
+- 모든 요청은 main의 `dispatch`에서 연결 켜짐 여부·도구 이름·지우기 허용을 확인한다.
+
+### Claude 데스크톱 확장
+- `scripts/build-electron.mjs`가 `mcp/stdio.ts`를 esbuild로 한 파일(`server/index.js`)로 묶고 `manifest.json`(v0.2)과 함께 `mcpb pack` → `dist-mcp/ThoughtFlow.mcpb`.
+  electron-builder `extraResources`로 설치본에 포함. "Claude 데스크톱에 설치" 버튼은 그 파일을 연다(Claude가 설치 창을 띄움).
+- 확장은 `%APPDATA%\ThoughtFlow\bridge.json`을 읽어 브리지에 연결한다. 연결이 안 되면(앱 꺼짐) bridge.json에 적힌 실행 명령으로 앱을 켜고 최대 30초 기다린다.
+  앱이 끝날 때 bridge.json에서 주소·토큰만 지우고 실행 명령은 남긴다.
+- 확장 설치가 안 되는 환경을 위해 "직접 설정": `ThoughtFlow.exe`를 `ELECTRON_RUN_AS_NODE=1`로 실행해 같은 서버 스크립트를 돌린다(Node 설치 불필요).
+
+### ChatGPT
+- ChatGPT는 원격 HTTPS MCP만 연결할 수 있어서, 설정에서 켜면 `cloudflared tunnel --url http://127.0.0.1:<포트>` 빠른 터널을 띄우고 출력에서 `https://….trycloudflare.com` 주소를 읽는다.
+  cloudflared가 없으면 `winget install --id Cloudflare.cloudflared` 안내. 빠른 터널 주소는 실행할 때마다 바뀌므로 ChatGPT 커넥터 주소도 바꿔야 한다(한계).
+- 엔드포인트는 세션 없는 Streamable HTTP + JSON 응답(터널 친화적). 요청마다 MCP 서버 인스턴스를 만든다.
+
+### 빌드 변경
+- Electron main/preload를 tsc 대신 **esbuild**로 묶는다(MCP SDK를 main에 넣기 위해, node_modules 배포 없이). `electron/tsconfig.json`은 타입 검사 전용.

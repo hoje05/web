@@ -16,6 +16,8 @@ export interface BoxNode {
   text: string;
   /** 오른쪽 창에서 쓰는 긴 생각 메모 */
   note: string;
+  /** AI가 만든 Box면 그 AI 이름 (Claude, ChatGPT …). 사람이 만든 Box는 없음. */
+  origin?: string;
 }
 
 export interface Anchor {

@@ -42,6 +42,7 @@ export function Board() {
   const draft = useStore((s) => s.draft);
   const searchQuery = useStore((s) => (s.searchOpen ? s.searchQuery.trim() : ''));
   const activePage = useStore((s) => (s.panelOpen ? s.activeTab : null));
+  const aiFlash = useStore((s) => s.aiFlash);
   useBoardInteraction(boardRef);
   const geoms = getRouteGeometry(doc);
   const routes = Object.values(doc.edges)
@@ -99,6 +100,7 @@ export function Board() {
             dropTarget={draft?.targetNodeId === n.id}
             search={searchQuery ? (nodeMatches(n, searchQuery) ? 'match' : 'dim') : null}
             active={activePage === n.id}
+            aiNew={aiFlash.includes(n.id)}
           />
         ))}
         {ghost && (

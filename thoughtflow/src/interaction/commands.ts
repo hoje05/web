@@ -19,7 +19,8 @@ export type Command =
   | 'zoomIn'
   | 'zoomOut'
   | 'zoomReset'
-  | 'zoomFit';
+  | 'zoomFit'
+  | 'aiSettings';
 
 export function runCommand(command: string) {
   const s = useStore.getState();
@@ -56,5 +57,7 @@ export function runCommand(command: string) {
       return s.zoomBy(1 / s.viewport.zoom);
     case 'zoomFit':
       return s.fitView();
+    case 'aiSettings':
+      return s.setAiSettingsOpen(true);
   }
 }

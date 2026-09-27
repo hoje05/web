@@ -5,10 +5,9 @@ import { createServer } from 'vite';
 
 const require = createRequire(import.meta.url);
 
-const tsc = spawnSync(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', 'electron/tsconfig.json'], {
-  stdio: 'inherit',
-});
-if (tsc.status !== 0) process.exit(tsc.status ?? 1);
+// main/preload + Claude 확장 빌드 (esbuild)
+const built = spawnSync(process.execPath, ['scripts/build-electron.mjs'], { stdio: 'inherit' });
+if (built.status !== 0) process.exit(built.status ?? 1);
 
 const server = await createServer();
 await server.listen();

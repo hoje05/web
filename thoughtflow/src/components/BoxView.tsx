@@ -15,9 +15,11 @@ interface Props {
   search: 'match' | 'dim' | null;
   /** 오른쪽 창에서 보고 있는 Box */
   active: boolean;
+  /** AI가 방금 만든 Box (잠깐 빛남) */
+  aiNew: boolean;
 }
 
-export const BoxView = memo(function BoxView({ node, selected, editing, borderHover, dropTarget, search, active }: Props) {
+export const BoxView = memo(function BoxView({ node, selected, editing, borderHover, dropTarget, search, active, aiNew }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   // 실제 렌더링 크기를 측정해 Doc에 반영 (Anchor 계산용). Undo 기록에는 남기지 않는다.
@@ -40,6 +42,7 @@ export const BoxView = memo(function BoxView({ node, selected, editing, borderHo
     search === 'match' && 'is-search-match',
     search === 'dim' && 'is-search-dim',
     active && 'is-active-page',
+    aiNew && 'is-ai-new',
   ]
     .filter(Boolean)
     .join(' ');
@@ -60,6 +63,11 @@ export const BoxView = memo(function BoxView({ node, selected, editing, borderHo
         </div>
       )}
       {node.note.trim() && <span className="box-note-mark" title="메모 있음" />}
+      {node.origin && (
+        <span className="box-ai-mark" title={`${node.origin}가 만든 Box`} data-testid="box-ai-mark">
+          {node.origin}
+        </span>
+      )}
       <span className="box-port port-top" />
       <span className="box-port port-right" />
       <span className="box-port port-bottom" />

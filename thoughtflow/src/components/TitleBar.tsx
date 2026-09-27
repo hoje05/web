@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { desktopApi, projectName } from '../persistence/fileService';
 import { useStore } from '../store/store';
+import { SparkIcon } from './AiToast';
 import { SaveStatus } from './SaveStatus';
 
 /**
@@ -13,6 +14,8 @@ export function TitleBar() {
   const filePath = useStore((s) => s.filePath);
   const drawerOpen = useStore((s) => s.drawerOpen);
   const setDrawer = useStore((s) => s.setDrawer);
+  const aiOpen = useStore((s) => s.aiSettingsOpen);
+  const setAiOpen = useStore((s) => s.setAiSettingsOpen);
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -42,6 +45,16 @@ export function TitleBar() {
       <div className="tb-spacer" />
       {desktopApi && (
         <div className="tb-controls" onMouseDown={(e) => e.preventDefault()}>
+          <button
+            className="tb-btn tb-ai"
+            title="AI 연결 (Claude · ChatGPT)"
+            aria-pressed={aiOpen}
+            data-testid="ai-button"
+            onClick={() => setAiOpen(!aiOpen)}
+          >
+            <SparkIcon />
+            <span>AI</span>
+          </button>
           <button
             className="tb-btn"
             title="메뉴 (파일 · 편집 · 보기)"

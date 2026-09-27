@@ -4,7 +4,7 @@
  * {
  *   "format": "thoughtflow", "version": 1,
  *   "board": { "zoom", "panX", "panY" },
- *   "nodes": [{ "id", "x", "y", "width", "height", "text", "note" }],   // note = 오른쪽 창의 메모 (v2)
+ *   "nodes": [{ "id", "x", "y", "width", "height", "text", "note", "origin"? }],   // note = 오른쪽 창의 메모 (v2), origin = 만든 AI (선택)
  *   "edges": [{ "id", "sourceNodeId", "targetNodeId",
  *               "sourceAnchor": { "side" }, "targetAnchor": { "side" },
  *               "pathPoints": [[u, v], ...],   // Chord 좌표 (source → target 순서)
@@ -61,6 +61,7 @@ export function serializeBoard(doc: Doc, viewport: Viewport, ui?: BoardUiState):
       height: round(n.height, 1),
       text: n.text,
       note: n.note,
+      ...(n.origin ? { origin: n.origin } : {}),
     })),
     edges: Object.values(doc.edges).map((e) => ({
       id: e.id,
@@ -115,6 +116,7 @@ export function parseBoard(text: string): {
       height: isNum(raw.height) && raw.height > 0 ? raw.height : DEFAULT_BOX_HEIGHT,
       text: typeof raw.text === 'string' ? raw.text : '',
       note: typeof raw.note === 'string' ? raw.note : '',
+      ...(typeof raw.origin === 'string' && raw.origin ? { origin: raw.origin.slice(0, 40) } : {}),
     };
   }
 

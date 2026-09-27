@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import type { AiRequest, AiResponse, AiSettings, AiState } from '../src/ai/protocol';
 
 /**
  * Renderer가 사용할 수 있는 유일한 OS API.
@@ -49,6 +50,28 @@ const api = {
     ipcRenderer.invoke('projects:rename', filePath, name),
   deleteProject: (filePath: string): Promise<{ deleted: boolean }> => ipcRenderer.invoke('projects:delete', filePath),
   revealProjects: (): Promise<void> => ipcRenderer.invoke('projects:reveal'),
+
+  // ── AI 연결 (Claude · ChatGPT) ──
+  onAiRequest: (callback: (req: AiRequest & { id: number }) => void) => {
+    const listener = (_e: IpcRendererEvent, req: AiRequest & { id: number }) => callback(req);
+    ipcRenderer.on('ai-request', listener);
+    return () => ipcRenderer.removeListener('ai-request', listener);
+  },
+  aiRespond: (id: number, res: AiResponse) => ipcRenderer.send('ai:response', id, res),
+  /** 보드를 불러와 AI 요청을 받을 준비가 됨 */
+  aiReady: () => ipcRenderer.send('ai:ready'),
+  aiGetState: (): Promise<AiState> => ipcRenderer.invoke('ai:get-state'),
+  aiSetSettings: (patch: Partial<AiSettings>): Promise<AiState> => ipcRenderer.invoke('ai:set', patch),
+  onAiState: (callback: (state: AiState) => void) => {
+    const listener = (_e: IpcRendererEvent, state: AiState) => callback(state);
+    ipcRenderer.on('ai-state', listener);
+    return () => ipcRenderer.removeListener('ai-state', listener);
+  },
+  aiRegenerateSecret: (): Promise<AiState> => ipcRenderer.invoke('ai:regenerate-secret'),
+  aiRestartTunnel: (): Promise<AiState> => ipcRenderer.invoke('ai:restart-tunnel'),
+  aiInstallClaude: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('ai:install-claude'),
+  aiSaveExtension: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('ai:save-extension'),
+  aiClaudeConfig: (): Promise<string> => ipcRenderer.invoke('ai:claude-config'),
 
   onOpenPath: (callback: (filePath: string) => void) => {
     const listener = (_e: IpcRendererEvent, filePath: string) => callback(filePath);

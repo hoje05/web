@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, type MenuItemConstructorOptions } from 'electron';
 import { existsSync, promises as fs } from 'fs';
 import * as path from 'path';
+import { setupAi, shutdownAi, watchRenderer, type StoredAi } from './ai';
 
 const FILE_FILTERS = [
   { name: 'ThoughtFlow Board', extensions: ['tflow'] },
@@ -51,6 +52,8 @@ function buildMenu() {
         item('새 프로젝트…', 'new', 'CmdOrCtrl+N'),
         item('프로젝트 목록', 'projects'),
         item('다른 위치에서 열기…', 'open', 'CmdOrCtrl+O'),
+        { type: 'separator' },
+        item('AI 연결 (Claude · ChatGPT)…', 'aiSettings'),
         { type: 'separator' },
         item('저장', 'save', 'CmdOrCtrl+S'),
         item('다른 이름으로 저장…', 'saveAs', 'CmdOrCtrl+Shift+S'),
@@ -125,6 +128,8 @@ function createWindow() {
       sendMenuCommand('flushAndClose');
     }
   });
+  // AI 요청은 화면이 다시 준비될 때까지 기다리게
+  watchRenderer(mainWindow.webContents);
   // 화면 프로세스가 죽었으면 저장을 기다리지 않고 닫을 수 있게
   mainWindow.webContents.on('render-process-gone', () => {
     closeReady = true;
@@ -154,6 +159,8 @@ interface Settings {
   lastFile?: string | null;
   /** 문서/ThoughtFlow 밖에서 열었던 보드들 (프로젝트 목록에 함께 표시) */
   recent?: string[];
+  /** AI 연결 설정 */
+  ai?: StoredAi;
 }
 
 async function readSettings(): Promise<Settings> {
@@ -169,8 +176,8 @@ let settingsQueue: Promise<void> = Promise.resolve();
 function updateSettings(fn: (cur: Settings) => Settings): Promise<void> {
   settingsQueue = settingsQueue.then(async () => {
     const next = fn(await readSettings());
-    await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
-    await fs.writeFile(settingsPath(), JSON.stringify(next, null, 2), 'utf-8');
+    // 쓰는 도중 앱이 끝나도 설정 파일이 비지 않도록 임시 파일 → 교체
+    await writeAtomic(settingsPath(), JSON.stringify(next, null, 2));
   }, () => undefined);
   return settingsQueue;
 }
@@ -286,7 +293,8 @@ function registerIpc() {
 
   ipcMain.on('app:close-now', () => {
     closeReady = true;
-    mainWindow?.close();
+    // 방금 보낸 "마지막 파일" 기록까지 끝낸 뒤 닫는다
+    void settingsQueue.finally(() => mainWindow?.close());
   });
 
   ipcMain.on('app:close-cancelled', () => {
@@ -432,7 +440,13 @@ if (!gotLock) {
     registerIpc();
     buildMenu();
     createWindow();
+    void setupAi({
+      getWindow: () => mainWindow,
+      readAi: async () => (await readSettings()).ai ?? {},
+      writeAi: (patch) => updateSettings((cur) => ({ ...cur, ai: { ...cur.ai, ...patch } })),
+    });
   });
 
   app.on('window-all-closed', () => app.quit());
+  app.on('will-quit', shutdownAi);
 }

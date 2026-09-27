@@ -9,6 +9,7 @@
  * OS 접근은 Electron preload가 노출한 window.thoughtflow API로만 한다.
  */
 import { flushEditing } from '../interaction/editing';
+import type { AiRequest, AiResponse, AiSettings, AiState } from '../ai/protocol';
 import type { Doc } from '../model/types';
 import { useStore } from '../store/store';
 import { FILE_EXTENSION, parseBoard, serializeBoard } from './fileFormat';
@@ -38,6 +39,18 @@ type Api = {
   renameProject: (filePath: string, name: string) => Promise<{ filePath: string } | { error: string }>;
   deleteProject: (filePath: string) => Promise<{ deleted: boolean }>;
   revealProjects: () => Promise<void>;
+  // ── AI 연결 ──
+  onAiRequest: (cb: (req: AiRequest & { id: number }) => void) => () => void;
+  aiRespond: (id: number, res: AiResponse) => void;
+  aiReady: () => void;
+  aiGetState: () => Promise<AiState>;
+  aiSetSettings: (patch: Partial<AiSettings>) => Promise<AiState>;
+  onAiState: (cb: (state: AiState) => void) => () => void;
+  aiRegenerateSecret: () => Promise<AiState>;
+  aiRestartTunnel: () => Promise<AiState>;
+  aiInstallClaude: () => Promise<{ ok: boolean; error?: string }>;
+  aiSaveExtension: () => Promise<{ ok: boolean; error?: string }>;
+  aiClaudeConfig: () => Promise<string>;
 };
 
 /** 프로젝트 = 보드 파일 하나 */
