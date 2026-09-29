@@ -296,7 +296,8 @@ export function updateBox(
   if (typeof args.note === 'string') patch.note = cleanNote(args.note);
   if (typeof args.append_note === 'string' && args.append_note.trim()) {
     const base = (patch.note ?? n.note).trimEnd();
-    patch.note = `${base}${base ? '\n\n' : ''}${args.append_note.trim()}`.slice(0, MAX_NOTE);
+    // 메모는 한 줄 = 한 블록: 줄바꿈 하나로 이어 붙여야 체크리스트·목록 뒤에 붙인 항목이 같은 목록이 된다
+    patch.note = `${base}${base ? '\n' : ''}${args.append_note.trim()}`.slice(0, MAX_NOTE);
   }
   if (!Object.keys(patch).length) return fail('바꿀 내용(title, note, append_note)이 없습니다.');
   const next = updateNode(doc, n.id, patch);

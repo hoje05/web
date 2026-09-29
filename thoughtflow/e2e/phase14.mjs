@@ -98,7 +98,7 @@ try {
   await win.click('[data-testid=panel-tab]:has-text("실험해 봄")');
   s = await state(win);
   assert(s.activeTab === (await node('실험해 봄 (1차)')).id && s.selection?.id === s.activeTab, 'clicking a tab switches the page and selects the box');
-  assert((await win.inputValue('[data-testid=panel-note]')).includes('A/B'), 'switched page shows its note');
+  assert((await win.textContent('[data-testid=panel-note]')).includes('A/B'), 'switched page shows its note');
 
   // 흐름 칩으로 이동
   await win.click('.flow-chip.flow-out');
@@ -133,7 +133,7 @@ try {
   await win.click('[data-testid=search-result]:has-text("실험해 봄")');
   s = await state(win);
   assert(s.activeTab === (await node('실험해 봄 (1차)')).id, 'clicking a result opens that page');
-  assert((await win.$$eval('.panel-note-backdrop mark', (m) => m.map((x) => x.textContent))).join() === '버튼', 'keyword highlighted inside the note');
+  assert((await win.$$eval('.panel-note mark', (m) => m.map((x) => x.textContent))).join() === '버튼', 'keyword highlighted inside the note');
   assert((await win.$$eval('.panel-tab.is-match', (t) => t.length)) >= 1, 'matching tabs marked');
   await win.screenshot({ path: 'e2e/out/phase14-search.png' });
   await win.click('[data-testid=search-input]');

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { NoteEditor, type NoteEditorHandle } from '../editor/NoteEditor';
 import { incomingEdges, outgoingEdges } from '../model/graph';
 import type { BoxNode, Doc } from '../model/types';
 import { nodeMatches, useStore } from '../store/store';
@@ -6,7 +7,7 @@ import { nodeMatches, useStore } from '../store/store';
 /**
  * 오른쪽 창: Box 하나에 대한 긴 생각을 쓰는 곳.
  *  - 윗부분: 연 Box들이 탭으로 한 줄 나열 → 클릭하면 그 Box의 창으로 전환
- *  - 제목(= Box에 보이는 글), 들어온/나간 흐름, 메모
+ *  - 제목(= Box에 보이는 글), 들어온/나간 흐름, 메모 (Notion식 블록 편집: "/" 메뉴, 제목·목록·체크박스)
  *  - × 로 닫으면, 다시 열 때는 Box 더블클릭
  */
 export function SidePanel() {
@@ -124,8 +125,7 @@ function useEditSession() {
 
 function PageEditor({ node, query }: { node: BoxNode; query: string }) {
   const titleRef = useRef<HTMLTextAreaElement>(null);
-  const noteRef = useRef<HTMLTextAreaElement>(null);
-  const backdropRef = useRef<HTMLDivElement>(null);
+  const noteRef = useRef<NoteEditorHandle>(null);
   const focusReq = useStore((s) => s.panelFocus);
   const edges = useStore((s) => s.doc.edges);
   const nodes = useStore((s) => s.doc.nodes);
@@ -142,24 +142,16 @@ function PageEditor({ node, query }: { node: BoxNode; query: string }) {
   // 더블클릭 등으로 요청된 포커스
   useEffect(() => {
     if (!focusReq || focusReq.nodeId !== node.id) return;
-    const el = focusReq.field === 'title' ? titleRef.current : noteRef.current;
+    if (focusReq.field === 'note') {
+      noteRef.current?.focus('end');
+      return;
+    }
+    const el = titleRef.current;
     if (!el) return;
     el.focus({ preventScroll: true });
     const end = el.value.length;
     el.setSelectionRange(end, end);
   }, [focusReq, node.id]);
-
-  // 검색어가 있으면 메모에서 첫 번째 위치로 스크롤
-  useEffect(() => {
-    const el = noteRef.current;
-    const q = query.trim().toLowerCase();
-    if (!el || !q) return;
-    const i = el.value.toLowerCase().indexOf(q);
-    if (i < 0) return;
-    const ratio = i / Math.max(1, el.value.length);
-    el.scrollTop = Math.max(0, ratio * el.scrollHeight - el.clientHeight / 3);
-    if (backdropRef.current) backdropRef.current.scrollTop = el.scrollTop;
-  }, [query, node.id]);
 
   const doc = { nodes, edges } as Doc;
   const incoming = incomingEdges(doc, node.id);
@@ -187,7 +179,7 @@ function PageEditor({ node, query }: { node: BoxNode; query: string }) {
           if (e.key === 'Enter' && !e.shiftKey) {
             // 제목에서 Enter → 메모로
             e.preventDefault();
-            noteRef.current?.focus();
+            noteRef.current?.focus('start');
           } else if (e.key === 'Escape') {
             e.currentTarget.blur();
           }
@@ -211,31 +203,17 @@ function PageEditor({ node, query }: { node: BoxNode; query: string }) {
           )}
         </div>
       )}
-      <div className="panel-note">
-        <div className="panel-note-backdrop" ref={backdropRef} aria-hidden>
-          <Highlighted text={node.note} query={query} />
-        </div>
-        <textarea
-          ref={noteRef}
-          className="panel-note-input"
-          value={node.note}
-          placeholder="이 생각에 대해 자유롭게 적어 보세요…"
-          spellCheck={false}
-          data-testid="panel-note"
-          onFocus={session.begin}
-          onBlur={session.end}
-          onScroll={(e) => {
-            if (backdropRef.current) backdropRef.current.scrollTop = e.currentTarget.scrollTop;
-          }}
-          onChange={(e) => {
-            session.touch();
-            s.setNoteLive(node.id, e.target.value);
-          }}
-          onKeyDown={(e) => {
-            if (!e.nativeEvent.isComposing && e.key === 'Escape') e.currentTarget.blur();
-          }}
-        />
-      </div>
+      <NoteEditor
+        ref={noteRef}
+        note={node.note}
+        query={query}
+        onFocus={session.begin}
+        onBlur={session.end}
+        onChange={(note) => {
+          session.touch();
+          useStore.getState().setNoteLive(node.id, note);
+        }}
+      />
     </div>
   );
 }
@@ -265,25 +243,6 @@ function FlowChip({ node, kind }: { node: BoxNode | undefined; kind: 'in' | 'out
       {firstLine(node.text)}
     </button>
   );
-}
-
-/** 메모 뒤에 깔리는 하이라이트 층 (textarea는 글자 일부만 색칠할 수 없으므로) */
-function Highlighted({ text, query }: { text: string; query: string }) {
-  const q = query.trim().toLowerCase();
-  // textarea 마지막 줄바꿈 뒤의 빈 줄 높이까지 맞추기 위한 공백
-  const body = text.endsWith('\n') ? `${text} ` : text;
-  if (!q) return <>{body}</>;
-  const parts: ReactNode[] = [];
-  const lower = body.toLowerCase();
-  let i = 0;
-  let k = 0;
-  for (let j = lower.indexOf(q); j >= 0; j = lower.indexOf(q, j + q.length)) {
-    if (j > i) parts.push(body.slice(i, j));
-    parts.push(<mark key={k++}>{body.slice(j, j + q.length)}</mark>);
-    i = j + q.length;
-  }
-  parts.push(body.slice(i));
-  return <>{parts}</>;
 }
 
 function ResizeHandle() {

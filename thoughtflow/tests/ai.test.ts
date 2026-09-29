@@ -140,7 +140,7 @@ describe('AI read / edit', () => {
     const up = updateBox(doc, { id: c.id, append_note: '다음엔 미리 확인' });
     if (!up.ok) throw new Error(up.error);
     doc = up.doc;
-    expect(doc.nodes[c.id].note).toBe('예상과 달랐다\n\n다음엔 미리 확인');
+    expect(doc.nodes[c.id].note).toBe('예상과 달랐다\n다음엔 미리 확인');
     expect(updateBox(doc, { id: c.id }).ok).toBe(false);
     expect(updateBox(doc, { id: c.id, title: ' ' }).ok).toBe(false);
 

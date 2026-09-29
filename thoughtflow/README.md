@@ -10,6 +10,7 @@ Box에 생각·행동·결과를 적고, 방향이 있는 **Route**로 이어서
 
 - Box 종류(Thought/Action/Result)를 강제하지 않습니다. 모든 Box는 같은 일반 Box입니다.
 - Box를 클릭하면 **오른쪽 창**에서 그 생각을 길게 적을 수 있고, 창 위쪽 **탭**으로 여러 생각을 오갈 수 있습니다.
+  메모는 **Notion처럼** `/` 메뉴로 제목·목록·체크박스를 넣고, `# ` `- ` `[] ` 같은 바로 입력과 굵게·기울임을 쓸 수 있습니다. ([아래 참고](#메모-쓰기-notion처럼))
 - 서로 다른 내용은 **프로젝트**로 나눠 관리합니다. 왼쪽 위 버튼을 누르면 프로젝트 목록이 왼쪽에서 나옵니다.
 - 행동할 때마다 **자동 저장**됩니다. 로그인·클라우드 없이 **이 PC의 `사용자 폴더\ThoughtFlow`** 에 파일(`.tflow`)로 저장하는 Local-first 앱입니다.
 - **Claude·ChatGPT와 연결**하면 AI가 대화의 흐름을 보드에 Box와 Route로 정리하고, 보드에 적힌 생각을 바탕으로 대화합니다. 쓰고 있는 구독 계정 그대로, API 키 없이. ([아래 참고](#ai와-함께-쓰기-claude--chatgpt))
@@ -93,6 +94,41 @@ npm run dist       # release/ThoughtFlow-Setup-<버전>.exe 생성
   백신·동기화 프로그램이 파일을 잠깐 잡고 있으면 자동으로 다시 시도하고, 저장이 끝나지 않으면 15초 뒤 `저장 실패`로 알려 줍니다 (앱이 멈추지 않습니다).
 
 오른쪽 아래 `?` 버튼을 누르면 앱 안에서도 사용법을 볼 수 있습니다.
+
+### 메모 쓰기 (Notion처럼)
+
+오른쪽 창의 메모는 **한 줄 = 한 블록**입니다. Enter마다 새 블록이 생기고, 블록마다 모양을 바꿀 수 있습니다.
+
+![메모 편집기](docs/images/note-editor.png)
+
+| 이렇게 입력 | 이렇게 바뀜 |
+|---|---|
+| `/` | **블록 메뉴** — 텍스트 · 제목 1~3 · 글머리 목록 · 번호 목록 · 할 일 목록 · 인용 · 코드 · 구분선 (글자를 치면 걸러지고, `↑` `↓` `Enter`로 고르기, `Esc`로 닫기) |
+| `# ` / `## ` / `### ` | 제목 1 / 2 / 3 |
+| `- ` 또는 `* ` | 글머리 목록 |
+| `1. ` | 번호 목록 |
+| `[] ` | 할 일(체크박스) — 네모를 눌러 체크 |
+| `> ` | 인용 |
+| ` ``` ` + 스페이스 | 코드 블록 |
+| `---` | 구분선 |
+| `**글**` · `*글*` · `~~글~~` · `` `글` `` | **굵게** · *기울임* · ~~취소선~~ · `코드` |
+| 글자를 드래그해서 고르기 | 위에 **서식 막대**(굵게 · 기울임 · 취소선 · 코드) |
+| 목록에서 빈 줄에 Enter | 목록 끝내기 |
+
+![블록 메뉴](docs/images/slash-menu.png)
+
+**단축키** — ThoughtFlow의 기존 단축키와 겹치는 것은 쓰지 않습니다.
+
+| 편집기 단축키 | 하는 일 |
+|---|---|
+| `Ctrl+B` / `Ctrl+I` / `Ctrl+E` | 굵게 / 기울임 / 코드 |
+| `Ctrl+Alt+1` ~ `3` | 제목 1 ~ 3 |
+| `Ctrl+Shift+8` / `7` / `9` | 글머리 / 번호 / 할 일 목록 |
+| `Ctrl+Shift+B` | 인용 |
+
+- 기존 단축키는 메모를 쓰는 중에도 전과 같습니다: `Ctrl+S` 저장, `Ctrl+Shift+S` 다른 이름으로 저장, `Ctrl+F` 찾기, `Ctrl+N` 새 프로젝트, `Ctrl+=`/`-`/`0` 확대·축소, `Ctrl+Z`/`Ctrl+Y` 입력 되돌리기, `Esc` 메모 칸에서 나가기, `Tab` 다음 칸으로.
+- 그래서 취소선 단축키(`Ctrl+Shift+S`)와 목록 들여쓰기(`Tab`)는 없습니다. 취소선은 `~~글~~`이나 서식 막대로 넣습니다.
+- 메모는 파일에 **Markdown 글자**로 저장됩니다(한 줄 = 한 블록). 예전 메모도 그대로 열리고, Claude·ChatGPT도 같은 형식으로 읽고 씁니다. Markdown 글을 붙여 넣으면 목록·제목으로 바뀌고(`Ctrl+Shift+V`는 그냥 글), 복사하면 Markdown 글로 복사됩니다.
 
 ## AI와 함께 쓰기 (Claude · ChatGPT)
 
@@ -195,6 +231,7 @@ src/store/       Zustand 상태 + Undo/Redo
 src/interaction/ hit test, pointer 상태 머신, 단축키, 명령
 src/persistence/ .tflow 파일 형식(검증 포함), 열기/저장/자동 저장
 src/components/  Board, BoxView, RouteView, Toolbar, TitleBar(프로그램 바), ProjectDrawer(프로젝트 창), SidePanel(오른쪽 창·탭), SearchBar, SaveStatus, AiSettings(AI 연결 창), AiToast …
+src/editor/      메모 편집기(Tiptap): 블록·"/" 메뉴·서식 막대(NoteEditor, extensions), 메모 ↔ Markdown 변환(markdown)
 src/ai/          AI가 보드를 읽고 고치는 함수(boardOps), 자동 배치(layout), 요청 처리(aiBridge)
 mcp/             MCP 서버 정의(server.ts, 도구 목록) + Claude 데스크톱 확장 진입점(stdio.ts)
 electron/ai.ts   로컬 브리지(Claude), ChatGPT용 HTTPS 엔드포인트 + cloudflared 터널, AI 연결 설정
@@ -204,7 +241,7 @@ electron/ai.ts   로컬 브리지(Claude), ChatGPT용 HTTPS 엔드포인트 + cl
 
 ```bash
 npm run typecheck
-npm test           # 단위 테스트 (geometry, 보정 알고리즘, anchor, 파일 형식, undo, AI 보드 조작·자동 배치)
+npm test           # 단위 테스트 (geometry, 보정 알고리즘, anchor, 파일 형식, undo, AI 보드 조작·자동 배치, 메모 Markdown 변환)
 # e2e는 테스트 전용 임시 폴더를 쓰므로 실제 프로젝트 폴더에 파일을 만들지 않습니다
 npm run e2e        # 실제 Electron 앱을 띄워 마우스/키보드로 조작하는 시나리오 (AI 연결은 실제 MCP 클라이언트로 확인)
 ```
@@ -224,5 +261,5 @@ GitHub 웹사이트에서 파일 두 개만 고쳐도 됩니다 (Git 명령 없�
 
 ## 파일 형식 (`.tflow`)
 
-JSON입니다(현재 버전 2 — 버전 1 파일도 열 수 있음). 각 Box에는 Board에 보이는 `text`와 오른쪽 창의 메모 `note`가 있고, AI가 만든 Box에는 `origin`(예: `"Claude"`)이 붙습니다. Route의 방향은 `sourceNodeId → targetNodeId`로 표현하고, 곡선은 시작/끝 Anchor를 잇는 선분 기준의
+JSON입니다(현재 버전 2 — 버전 1 파일도 열 수 있음). 각 Box에는 Board에 보이는 `text`와 오른쪽 창의 메모 `note`(Markdown 글, 한 줄 = 한 블록 — `src/editor/markdown.ts`)가 있고, AI가 만든 Box에는 `origin`(예: `"Claude"`)이 붙습니다. Route의 방향은 `sourceNodeId → targetNodeId`로 표현하고, 곡선은 시작/끝 Anchor를 잇는 선분 기준의
 상대 좌표(`pathPoints: [u, v]`)로 저장해서 Box를 옮겨도 곡선 형태가 유지됩니다. 자세한 내용은 `src/persistence/fileFormat.ts` 참고.

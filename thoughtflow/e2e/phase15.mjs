@@ -157,6 +157,8 @@ try {
   await win.keyboard.press('Enter');
   await win.waitForFunction(() => window.__tf.getState().filePath?.endsWith('가을 여행.tflow'));
   assert((await projectTitle()) === '가을 여행', 'renaming the current project updates the bar');
+  // 이름 입력칸이 닫힌 뒤의 Esc (입력칸이 남아 있는 동안의 Esc는 입력 취소)
+  await win.waitForSelector('[data-testid=project-name-input]', { state: 'detached' });
   await win.keyboard.press('Escape');
   assert(!(await drawerOpen()), 'Esc closes the drawer');
   await box(700, 600, '환전하기');
