@@ -10,7 +10,7 @@ const api = {
     ipcRenderer.invoke('file:open'),
   readFile: (filePath: string): Promise<{ filePath: string; content: string }> =>
     ipcRenderer.invoke('file:read', filePath),
-  /** 이름 없는 보드를 자동 저장할 새 경로 (문서/ThoughtFlow) */
+  /** 이름 없는 보드를 자동 저장할 새 경로 (사용자 폴더/ThoughtFlow) */
   newBoardPath: (): Promise<string> => ipcRenderer.invoke('file:new-path'),
   /** filePath가 null이면 저장 위치를 묻는다 (다른 이름으로 저장) */
   saveFile: (args: {
@@ -44,8 +44,9 @@ const api = {
   // ── 프로젝트 ──
   listProjects: (): Promise<{ filePath: string; name: string; modifiedAt: number; boxCount: number | null }[]> =>
     ipcRenderer.invoke('projects:list'),
-  newProjectPath: (name: string): Promise<{ filePath: string } | { error: string }> =>
-    ipcRenderer.invoke('projects:new-path', name),
+  createProjectFile: (name: string, content: string): Promise<{ filePath: string } | { error: string }> =>
+    ipcRenderer.invoke('projects:create', name, content),
+  projectsDir: (): Promise<string> => ipcRenderer.invoke('projects:dir'),
   renameProject: (filePath: string, name: string): Promise<{ filePath: string } | { error: string }> =>
     ipcRenderer.invoke('projects:rename', filePath, name),
   deleteProject: (filePath: string): Promise<{ deleted: boolean }> => ipcRenderer.invoke('projects:delete', filePath),

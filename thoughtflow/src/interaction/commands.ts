@@ -1,7 +1,7 @@
 /**
  * 단축키와 메뉴가 공유하는 명령.
  */
-import { flushAndClose, openBoard, saveBoard, saveBoardAs } from '../persistence/fileService';
+import { flushAndClose, newProject, openBoard, saveBoard, saveBoardAs } from '../persistence/fileService';
 import { useStore } from '../store/store';
 import { flushEditing } from './editing';
 
@@ -26,8 +26,8 @@ export function runCommand(command: string) {
   const s = useStore.getState();
   switch (command as Command) {
     case 'new':
-      // 새 프로젝트: 왼쪽 프로젝트 창을 열고 이름 입력칸으로
-      return s.setDrawer(true, true);
+      // 새 프로젝트: 텅 빈 새 보드를 바로 연다
+      return void newProject();
     case 'projects':
       return s.setDrawer(!s.drawerOpen);
     case 'open':

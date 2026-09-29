@@ -4,6 +4,7 @@ import {
   deleteProject,
   listProjects,
   openBoard,
+  projectsDir,
   renameProject,
   revealProjects,
   samePath,
@@ -16,32 +17,31 @@ import { useStore } from '../store/store';
 /**
  * 프로젝트 창: 프로그램 바 왼쪽 위 버튼을 누르면 왼쪽에서 스르륵 나온다.
  * 프로젝트 = 보드 파일 하나 (서로 다른 생각 흐름을 따로 관리).
- * 새 프로젝트를 만들거나, 이전 프로젝트를 눌러 그 보드로 전환한다.
+ * "+ 새 프로젝트"를 누르면 텅 빈 새 보드가 바로 열리고, 이전 프로젝트를 누르면 그 보드로 전환한다.
+ * 모든 프로젝트는 이 PC의 사용자 폴더/ThoughtFlow에 저장된다.
  */
 export function ProjectDrawer() {
   const open = useStore((s) => s.drawerOpen);
-  const createRequested = useStore((s) => s.drawerCreate);
   const filePath = useStore((s) => s.filePath);
   const setDrawer = useStore((s) => s.setDrawer);
   const [projects, setProjects] = useState<ProjectInfo[] | null>(null);
-  const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [folder, setFolder] = useState<string | null>(null);
 
   const refresh = async () => setProjects(await listProjects());
 
   useEffect(() => {
     if (!open) {
-      setCreating(false);
       setRenaming(null);
       setError(null);
       return;
     }
     // 지금 보드의 마지막 변경을 저장한 뒤 목록을 읽는다 (수정 시각·Box 수가 최신이 되도록)
     void saveNow().then(refresh);
-    if (createRequested) setCreating(true);
-  }, [open, createRequested]);
+    void projectsDir().then(setFolder);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -51,13 +51,6 @@ export function ProjectDrawer() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, setDrawer]);
-
-  const names = new Set((projects ?? []).map((p) => p.name));
-  const defaultName = () => {
-    let n = '새 프로젝트';
-    for (let i = 2; names.has(n); i++) n = `새 프로젝트 ${i}`;
-    return n;
-  };
 
   const run = async (fn: () => Promise<string | null | void>) => {
     setBusy(true);
@@ -84,34 +77,19 @@ export function ProjectDrawer() {
           </button>
         </div>
 
-        {creating ? (
-          <NameForm
-            key={`create-${open}`}
-            initial={defaultName()}
-            placeholder="프로젝트 이름"
-            submitLabel="만들기"
-            busy={busy}
-            onCancel={() => {
-              setCreating(false);
-              setError(null);
-            }}
-            onSubmit={async (name) => {
-              if (await run(() => createProject(name))) setDrawer(false);
-            }}
-          />
-        ) : (
-          <button
-            className="drawer-new"
-            data-testid="new-project"
-            tabIndex={open ? 0 : -1}
-            onClick={() => {
-              setCreating(true);
-              setRenaming(null);
-            }}
-          >
-            <span className="drawer-new-plus">+</span> 새 프로젝트
-          </button>
-        )}
+        <button
+          className="drawer-new"
+          data-testid="new-project"
+          title="텅 빈 새 보드를 엽니다 (Ctrl+N)"
+          tabIndex={open ? 0 : -1}
+          disabled={busy}
+          onClick={async () => {
+            setRenaming(null);
+            if (await run(() => createProject())) setDrawer(false);
+          }}
+        >
+          <span className="drawer-new-plus">+</span> 새 프로젝트
+        </button>
         {error && <div className="drawer-error" data-testid="drawer-error">{error}</div>}
 
         <div className="drawer-section">최근 프로젝트</div>
@@ -125,7 +103,10 @@ export function ProjectDrawer() {
                   placeholder="새 이름"
                   submitLabel="바꾸기"
                   busy={busy}
-                  onCancel={() => setRenaming(null)}
+                  onCancel={() => {
+                    setRenaming(null);
+                    setError(null);
+                  }}
                   onSubmit={async (name) => {
                     if (await run(() => renameProject(p.filePath, name))) {
                       setRenaming(null);
@@ -160,7 +141,6 @@ export function ProjectDrawer() {
                     tabIndex={open ? 0 : -1}
                     onClick={() => {
                       setRenaming(p.filePath);
-                      setCreating(false);
                       setError(null);
                     }}
                   >
@@ -201,6 +181,11 @@ export function ProjectDrawer() {
             저장 폴더 열기
           </button>
         </div>
+        {folder && (
+          <div className="drawer-folder" data-testid="projects-dir" title={folder}>
+            이 PC에만 저장: {folder}
+          </div>
+        )}
       </aside>
     </>
   );

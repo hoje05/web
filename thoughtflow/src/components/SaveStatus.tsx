@@ -14,7 +14,7 @@ export function SaveStatus() {
   return (
     <button
       className={`save-status state-${kind}`}
-      title={filePath ?? '문서/ThoughtFlow 폴더에 자동으로 저장됩니다'}
+      title={filePath ?? '이 PC의 사용자 폴더/ThoughtFlow에 자동으로 저장됩니다'}
       data-testid="save-status"
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => void saveBoard()}

@@ -42,7 +42,7 @@ const manifest = {
   version: pkg.version,
   description: 'Claude와 나눈 대화의 흐름을 ThoughtFlow 보드에 Box와 Route로 정리하고, 보드에 적힌 생각을 바탕으로 대화합니다.',
   long_description:
-    '이 PC에서 실행 중인 ThoughtFlow 앱과 연결합니다. Claude는 지금 열린 프로젝트의 Box와 Route를 읽고, 대화에서 나온 생각·행동·결과를 새 Box로 추가하고 이어 줍니다. 모든 내용은 이 PC 안(127.0.0.1)에서만 오가며, ThoughtFlow에서 Ctrl+Z로 언제든 되돌릴 수 있습니다. ThoughtFlow가 꺼져 있으면 자동으로 켭니다.',
+    '이 PC에서 실행 중인 ThoughtFlow 앱과 연결합니다. 대화를 정리해 달라고 하면 새 프로젝트(빈 보드)를 만들어 생각·행동·결과를 Box와 Route로 정리하고, 보드에 적힌 생각을 읽고 대화합니다. 앱과의 연결은 이 PC 안(127.0.0.1)에서만 이루어지고 보드 파일은 이 PC에만 저장됩니다. ThoughtFlow에서 Ctrl+Z로 언제든 되돌릴 수 있고, ThoughtFlow가 꺼져 있으면 자동으로 켭니다.',
   author: { name: pkg.author ?? 'ThoughtFlow' },
   icon: 'icon.png',
   server: {

@@ -5,7 +5,7 @@ import { useStore } from '../store/store';
 import { SparkIcon } from './AiToast';
 
 const EXAMPLES = [
-  '지금까지 대화를 ThoughtFlow에 흐름으로 정리해줘',
+  '지금까지 대화를 ThoughtFlow에 정리해줘 (새 프로젝트로 만들어져요)',
   "ThoughtFlow의 '여행 계획' 프로젝트를 열고, 내가 적어 둔 생각을 바탕으로 다음 행동을 같이 정해줘",
   "'비행기 표' Box 뒤에 우리가 방금 정한 결정을 이어서 적어줘",
   '내 보드에서 아직 결과가 없는 행동이 뭐가 있는지 알려줘',

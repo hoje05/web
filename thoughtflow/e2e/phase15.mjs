@@ -1,4 +1,4 @@
-// 프로그램 바(창 조작) + 왼쪽 프로젝트 창(새 프로젝트, 전환, 이름 바꾸기, 휴지통)
+// 프로그램 바(창 조작, 이름 바꾸기) + 왼쪽 프로젝트 창(새 프로젝트, 전환, 이름 바꾸기, 휴지통)
 import { launch, state, assert, toScreen, shutdown } from './harness.mjs';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,6 +14,16 @@ const waitSaved = () =>
   });
 const drawerOpen = () => win.evaluate(() => window.__tf.getState().drawerOpen);
 const projectTitle = () => win.textContent('[data-testid=project-name]');
+/** 프로그램 바의 이름을 눌러 이름 바꾸기 */
+const renameInBar = async (name) => {
+  await win.click('[data-testid=project-name]');
+  await win.waitForSelector('input[data-testid=project-name-input]');
+  await win.waitForFunction(() => document.activeElement?.matches('input[data-testid=project-name-input]'));
+  await win.keyboard.press('Control+a');
+  await win.keyboard.type(name);
+  await win.keyboard.press('Enter');
+  await win.waitForFunction((n) => window.__tf.getState().filePath?.endsWith(`${n}.tflow`), name);
+};
 const openDrawer = async () => {
   await win.click('[data-testid=project-button]');
   await win.waitForSelector('[data-testid=project-drawer].is-open');
@@ -74,14 +84,17 @@ try {
   assert(closedX < -250 && midX > closedX && midX < 0 && openX === 0, `drawer slides in from the left (${Math.round(closedX)} → ${Math.round(midX)} → ${openX})`);
   assert(await drawerOpen(), 'project button opens the drawer');
 
-  // 새 프로젝트 만들기
+  assert((await win.textContent('[data-testid=projects-dir]')).includes(sandbox.boards), 'drawer shows where projects are stored (this PC)');
+
+  // 새 프로젝트: 누르면 텅 빈 새 보드가 바로 열린다 (이름은 나중에)
   await win.click('[data-testid=new-project]');
-  await win.fill('[data-testid=project-name-input]', '여행 계획');
-  await win.keyboard.press('Enter');
-  await win.waitForFunction(() => window.__tf.getState().filePath?.endsWith('여행 계획.tflow'));
+  await win.waitForFunction(() => window.__tf.getState().filePath?.endsWith('새 프로젝트.tflow'));
   assert(!(await drawerOpen()), 'drawer closes after creating');
-  assert((await projectTitle()) === '여행 계획', 'bar shows the new project name');
-  assert(boards().includes('여행 계획.tflow'), 'project file created right away');
+  assert((await projectTitle()) === '새 프로젝트', 'new project opens right away as “새 프로젝트”');
+  assert(boards().includes('새 프로젝트.tflow'), 'project file created right away');
+  await renameInBar('여행 계획');
+  assert((await projectTitle()) === '여행 계획', 'clicking the name in the bar renames the project');
+  assert(boards().includes('여행 계획.tflow') && !boards().includes('새 프로젝트.tflow'), 'renaming in the bar renames the file');
   await box(520, 300, '비행기 예약');
   await box(820, 300, '숙소 알아보기');
   let s = await state(win);
@@ -92,22 +105,19 @@ try {
   await win.keyboard.press('Escape');
   await waitSaved();
 
-  // Ctrl+N → 이름 입력칸이 열린 프로젝트 창
+  // Ctrl+N → 텅 빈 새 보드가 바로
   await win.keyboard.press('Control+n');
-  await win.waitForSelector('[data-testid=project-drawer].is-open [data-testid=project-name-input]');
-  assert((await win.inputValue('[data-testid=project-name-input]')) === '새 프로젝트', 'Ctrl+N opens the drawer with a name suggestion');
-  await win.waitForFunction(() => document.activeElement?.dataset.testid === 'project-name-input');
-  await win.keyboard.type('독서 노트');
-  await win.keyboard.press('Enter');
-  await win.waitForFunction(() => window.__tf.getState().filePath?.endsWith('독서 노트.tflow'));
+  await win.waitForFunction(() => window.__tf.getState().filePath?.endsWith('새 프로젝트.tflow'));
   s = await state(win);
-  assert(Object.keys(s.doc.nodes).length === 0 && !s.panelOpen, 'new project starts with an empty board');
+  assert(Object.keys(s.doc.nodes).length === 0 && !s.panelOpen && !(await drawerOpen()), 'Ctrl+N opens a new empty board right away');
+  await renameInBar('독서 노트');
   await box(600, 400, '데미안 3장');
   await waitSaved();
 
-  // 같은 이름은 거절
+  // 같은 이름으로 바꾸기는 거절
   await openDrawer();
-  await win.click('[data-testid=new-project]');
+  await itemRow('독서 노트').hover();
+  await itemRow('독서 노트').locator('[data-testid=project-rename]').click();
   await win.fill('[data-testid=project-name-input]', '여행 계획');
   await win.keyboard.press('Enter');
   await win.waitForSelector('[data-testid=drawer-error]');

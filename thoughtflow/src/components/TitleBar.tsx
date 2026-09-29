@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { desktopApi, projectName } from '../persistence/fileService';
+import { useEffect, useRef, useState } from 'react';
+import { alertUser, desktopApi, projectName, renameProject } from '../persistence/fileService';
 import { useStore } from '../store/store';
 import { SparkIcon } from './AiToast';
 import { SaveStatus } from './SaveStatus';
@@ -37,9 +37,7 @@ export function TitleBar() {
         <AppLogo />
       </button>
       <div className="tb-title">
-        <span className="tb-name" data-testid="project-name">
-          {projectName(filePath)}
-        </span>
+        <ProjectTitle filePath={filePath} />
         <SaveStatus />
       </div>
       <div className="tb-spacer" />
@@ -100,6 +98,65 @@ export function TitleBar() {
         </div>
       )}
     </header>
+  );
+}
+
+/** 프로젝트 이름. 누르면 그 자리에서 이름을 바꾼다 (새 프로젝트는 "새 프로젝트"로 만들어지므로). */
+function ProjectTitle({ filePath }: { filePath: string | null }) {
+  const [editing, setEditing] = useState(false);
+  const name = projectName(filePath);
+  if (!filePath || !editing) {
+    return filePath ? (
+      <button className="tb-name" data-testid="project-name" title="눌러서 이름 바꾸기" onClick={() => setEditing(true)}>
+        {name}
+      </button>
+    ) : (
+      <span className="tb-name" data-testid="project-name">
+        {name}
+      </span>
+    );
+  }
+  return (
+    <TitleInput
+      initial={name}
+      onDone={async (next) => {
+        setEditing(false);
+        if (!next || next === name) return;
+        const problem = await renameProject(filePath, next);
+        if (problem) await alertUser(problem);
+      }}
+    />
+  );
+}
+
+function TitleInput({ initial, onDone }: { initial: string; onDone: (name: string | null) => void }) {
+  const [value, setValue] = useState(initial);
+  const ref = useRef<HTMLInputElement>(null);
+  const done = useRef(false);
+  const finish = (name: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    onDone(name);
+  };
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+  return (
+    <input
+      ref={ref}
+      className="tb-name-input"
+      data-testid="project-name-input"
+      value={value}
+      spellCheck={false}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => finish(value.trim())}
+      onKeyDown={(e) => {
+        if (e.nativeEvent.isComposing) return;
+        if (e.key === 'Enter') finish(value.trim());
+        else if (e.key === 'Escape') finish(null);
+      }}
+    />
   );
 }
 

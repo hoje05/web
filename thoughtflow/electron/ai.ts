@@ -92,13 +92,30 @@ async function callRenderer(req: AiRequest): Promise<AiResponse> {
     const id = ++requestSeq;
     const timer = setTimeout(() => {
       pending.delete(id);
-      resolve(errorRes('ThoughtFlow가 제때 응답하지 않았습니다. 앱 화면에 열린 대화상자가 있는지 확인해 주세요.'));
+      resolve(
+        errorRes(
+          'ThoughtFlow가 30초 안에 응답하지 않았습니다. 사용자에게 ThoughtFlow 창을 열어 저장 상태(위쪽 "저장 실패" 표시)를 확인하고, 계속되면 ThoughtFlow를 껐다 켠 뒤 다시 시도해 달라고 안내하세요.',
+        ),
+      );
     }, RENDERER_TIMEOUT_MS);
     pending.set(id, (res) => {
       clearTimeout(timer);
+      if (!res.isError && CHANGING_TOOLS.includes(req.tool)) attention(win);
       resolve(res);
     });
     win.webContents.send('ai-request', { id, ...req });
+  });
+}
+
+/** 보드나 화면을 바꾸는 도구 */
+const CHANGING_TOOLS: readonly AiToolName[] = ['add_flow', 'update_box', 'connect_boxes', 'delete_items', 'focus_box', 'open_project', 'create_project'];
+
+/** AI가 보드를 바꿨는데 사용자가 다른 창(Claude)을 보고 있으면 작업 표시줄의 ThoughtFlow를 깜빡여 알린다 */
+function attention(win: BrowserWindow) {
+  if (win.isDestroyed() || win.isFocused()) return;
+  win.flashFrame(true);
+  win.once('focus', () => {
+    if (!win.isDestroyed()) win.flashFrame(false);
   });
 }
 
@@ -216,9 +233,31 @@ async function handleBridge(req: IncomingMessage, res: ServerResponse) {
     } catch {
       return sendJson(res, 400, { text: '잘못된 요청입니다.', isError: true });
     }
-    return sendJson(res, 200, await dispatch('claude', body.tool, body.args, body.client));
+    const result = await dispatch('claude', body.tool, body.args, body.client);
+    return sendJson(res, 200, withExtensionNotice(result, req.headers['x-thoughtflow-extension']));
   }
   sendJson(res, 404, { error: 'not found' });
+}
+
+/** "0.5.0" < "0.6.0" */
+function olderVersion(a: string, b: string): boolean {
+  const pa = a.split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = b.split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) < (pb[i] ?? 0);
+  return false;
+}
+
+let extensionNoticeShown = false;
+
+/** Claude 데스크톱에 설치된 확장이 앱보다 옛 버전이면 (앱 실행마다 한 번) Claude에게 업데이트 안내를 덧붙인다 */
+function withExtensionNotice(result: AiResponse, header: string | string[] | undefined): AiResponse {
+  const ext = typeof header === 'string' ? header : '0.5.0';
+  if (extensionNoticeShown || !olderVersion(ext, app.getVersion())) return result;
+  extensionNoticeShown = true;
+  return {
+    ...result,
+    text: `${result.text}\n\n(참고: Claude 데스크톱에 설치된 ThoughtFlow 확장이 옛 버전(${ext})입니다. 앱은 ${app.getVersion()}입니다. 사용자에게 ThoughtFlow의 ✦ AI → "Claude 데스크톱에 설치"를 한 번 더 눌러 확장을 업데이트해 달라고 알려 주세요.)`,
+  };
 }
 
 async function startBridge() {

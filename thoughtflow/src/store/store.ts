@@ -56,7 +56,8 @@ export interface AppState extends History {
 
   // ── AI 연결 ──
   /** AI가 마지막으로 보드를 바꾼 내용 (알림 + 되돌리기). before = 바꾸기 직전 Doc (Undo 기록의 맨 위) */
-  aiActivity: { seq: number; message: string; before: Doc } | null;
+  /** AI가 한 일 (알림). before: 바꾸기 전 Doc — 보드를 바꾸지 않은 알림이면 null */
+  aiActivity: { seq: number; message: string; before: Doc | null } | null;
   /** AI가 방금 만든 Box (잠깐 빛나게) */
   aiFlash: string[];
   /** AI 연결 설정 창 */
@@ -65,9 +66,7 @@ export interface AppState extends History {
 
   // ── 프로젝트 창 (왼쪽에서 스르륵) ──
   drawerOpen: boolean;
-  /** 열 때 바로 "새 프로젝트" 이름 입력칸을 보여 줄지 */
-  drawerCreate: boolean;
-  setDrawer: (open: boolean, create?: boolean) => void;
+  setDrawer: (open: boolean) => void;
 
   // ── Doc 변경 (history) ──
   /** 새 Doc을 적용하고 이전 Doc을 Undo 기록에 넣는다 */
@@ -165,8 +164,7 @@ export const useStore = create<AppState>()((set, get) => ({
   aiFlash: [],
   aiSettingsOpen: false,
   setAiSettingsOpen: (aiSettingsOpen) => set({ aiSettingsOpen }),
-  drawerCreate: false,
-  setDrawer: (drawerOpen, drawerCreate = false) => set({ drawerOpen, drawerCreate: drawerOpen && drawerCreate }),
+  setDrawer: (drawerOpen) => set({ drawerOpen }),
 
   commit: (next) =>
     set((s) => (next === s.doc ? {} : { doc: next, past: pushPast(s.past, s.doc), future: [] })),

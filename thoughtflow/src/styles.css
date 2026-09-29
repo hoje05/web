@@ -988,6 +988,37 @@ svg.layer {
   font-weight: 600;
 }
 
+/* 프로젝트 이름: 눌러서 바로 이름 바꾸기 */
+.titlebar button.tb-name {
+  padding: 3px 6px;
+  margin-left: -6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  cursor: text;
+}
+
+.titlebar button.tb-name:hover {
+  background: var(--panel-hover);
+}
+
+.tb-name-input {
+  width: 240px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  -webkit-app-region: no-drag;
+}
+
 .tb-spacer {
   flex: 1;
   align-self: stretch;
@@ -1305,6 +1336,20 @@ svg.layer {
 .drawer-foot button:hover {
   background: var(--panel-hover);
   color: var(--ink);
+}
+
+.drawer-folder {
+  padding: 0 18px 12px;
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-new:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 @media (prefers-reduced-motion: reduce) {

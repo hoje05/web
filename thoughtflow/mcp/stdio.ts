@@ -56,7 +56,11 @@ async function post(info: BridgeInfo | null, path: string, body?: unknown): Prom
   try {
     res = await fetch(`http://127.0.0.1:${info.port}${path}`, {
       method: body === undefined ? 'GET' : 'POST',
-      headers: { authorization: `Bearer ${info.token}`, 'content-type': 'application/json' },
+      headers: {
+        authorization: `Bearer ${info.token}`,
+        'content-type': 'application/json',
+        'x-thoughtflow-extension': typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.0.0',
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(60000),
     });

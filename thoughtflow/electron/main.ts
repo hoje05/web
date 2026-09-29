@@ -11,8 +11,14 @@ const FILE_FILTERS = [
 // 테스트에서 사용자 데이터/보드 폴더를 분리하기 위한 환경 변수
 if (process.env.THOUGHTFLOW_USER_DATA) app.setPath('userData', process.env.THOUGHTFLOW_USER_DATA);
 
-/** 이름 없이 만든 보드가 자동 저장되는 폴더: 문서/ThoughtFlow */
-const boardsDir = () => process.env.THOUGHTFLOW_BOARDS_DIR ?? path.join(app.getPath('documents'), 'ThoughtFlow');
+/**
+ * 프로젝트(보드 파일) 폴더: 사용자 폴더/ThoughtFlow (예: C:\Users\이름\ThoughtFlow).
+ * 문서 폴더는 OneDrive·iCloud로 인터넷에 동기화되거나 Windows 보안(제어된 폴더 액세스)이 쓰기를 막는 일이 많아 쓰지 않는다.
+ */
+const boardsDir = () => process.env.THOUGHTFLOW_BOARDS_DIR ?? path.join(app.getPath('home'), 'ThoughtFlow');
+/** v0.5까지 쓰던 폴더: 문서/ThoughtFlow. 처음 실행할 때 새 폴더로 복사한다. */
+const legacyBoardsDir = () =>
+  process.env.THOUGHTFLOW_LEGACY_BOARDS_DIR ?? (process.env.THOUGHTFLOW_BOARDS_DIR ? null : path.join(app.getPath('documents'), 'ThoughtFlow'));
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 
 let mainWindow: BrowserWindow | null = null;
@@ -107,6 +113,8 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Claude 창 뒤에 가려져 있어도 AI 요청 처리·자동 저장이 늦춰지지 않게
+      backgroundThrottling: false,
     },
   });
 
@@ -157,10 +165,12 @@ function fileArgFromArgv(argv: string[]): string | null {
 
 interface Settings {
   lastFile?: string | null;
-  /** 문서/ThoughtFlow 밖에서 열었던 보드들 (프로젝트 목록에 함께 표시) */
+  /** 프로젝트 폴더 밖에서 열었던 보드들 (프로젝트 목록에 함께 표시) */
   recent?: string[];
   /** AI 연결 설정 */
   ai?: StoredAi;
+  /** 문서/ThoughtFlow → 사용자 폴더/ThoughtFlow 복사를 마쳤음 */
+  boardsMigrated?: boolean;
 }
 
 async function readSettings(): Promise<Settings> {
@@ -213,12 +223,106 @@ function nameProblem(name: string): string | null {
 
 const cleanName = (name: string) => name.trim().replace(/\.tflow$/i, '').trim();
 
-/** 임시 파일에 먼저 쓰고 교체 → 저장 도중 문제가 생겨도 기존 파일이 깨지지 않는다. */
+/** 새 프로젝트 이름: 파일 이름에 못 쓰는 글자는 공백으로 바꾼다 (AI가 "여행: 계획"처럼 지어도 만들어지게) */
+function safeProjectName(raw: string): string {
+  let n = cleanName(raw)
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[. ]+$/, '')
+    .slice(0, 100)
+    .trim();
+  if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(n)) n = `${n} 프로젝트`;
+  return n;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Windows에서 백신·동기화 프로그램이 파일을 잠깐 잡고 있을 때 나는 오류 */
+const BUSY_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+
+/**
+ * 임시 파일에 먼저 쓰고 교체 → 저장 도중 문제가 생겨도 기존 파일이 깨지지 않는다.
+ * 교체가 잠깐 막히면 몇 번 다시 시도하고, 끝까지 막히면 파일에 바로 쓴다.
+ */
 async function writeAtomic(target: string, content: string) {
   await fs.mkdir(path.dirname(target), { recursive: true });
   const tmp = `${target}.tmp`;
   await fs.writeFile(tmp, content, 'utf-8');
-  await fs.rename(tmp, target);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await fs.rename(tmp, target);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? '';
+      if (BUSY_CODES.has(code) && attempt < 8) {
+        await sleep(60 * attempt);
+        continue;
+      }
+      try {
+        if (!BUSY_CODES.has(code)) throw err;
+        await fs.writeFile(target, content, 'utf-8');
+        return;
+      } finally {
+        await fs.rm(tmp, { force: true }).catch(() => undefined);
+      }
+    }
+  }
+}
+
+/** 파일 오류를 사용자에게 보여 줄 말로 */
+function fsErrorText(err: unknown): string {
+  const code = (err as NodeJS.ErrnoException)?.code;
+  if (code === 'EPERM' || code === 'EACCES') return '폴더에 쓸 권한이 없습니다. 백신이나 Windows 보안의 "제어된 폴더 액세스"가 막고 있는지 확인해 주세요.';
+  if (code === 'ENOSPC') return '디스크 공간이 부족합니다.';
+  if (code === 'EBUSY') return '다른 프로그램이 파일을 쓰고 있습니다. 잠시 후 다시 시도해 주세요.';
+  return err instanceof Error ? err.message : String(err);
+}
+
+const normPath = (p: string) => (process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p));
+
+/**
+ * v0.5까지 문서/ThoughtFlow에 있던 보드를 사용자 폴더/ThoughtFlow로 한 번 복사한다.
+ * 원본은 그대로 두고(백업), 마지막 보드·최근 목록은 새 위치를 가리키게 바꾼다.
+ * 문서 폴더가 클라우드 전용 파일이라 느리더라도 시작이 오래 멈추지 않도록 시간 한도를 둔다.
+ */
+let migration: Promise<void> | null = null;
+function migrateBoards(): Promise<void> {
+  migration ??= (async () => {
+    const from = legacyBoardsDir();
+    if (!from || (await readSettings()).boardsMigrated) return;
+    const to = boardsDir();
+    const copied = new Map<string, string>();
+    const deadline = Date.now() + 10000;
+    try {
+      const names = (await fs.readdir(from)).filter((n) => n.toLowerCase().endsWith('.tflow'));
+      await fs.mkdir(to, { recursive: true });
+      for (const n of names) {
+        const src = path.join(from, n);
+        const dst = path.join(to, n);
+        const left = deadline - Date.now();
+        if (left <= 0) break;
+        if (existsSync(dst)) continue;
+        const copy = (async () => {
+          const st = await fs.stat(src);
+          await fs.copyFile(src, `${dst}.tmp`);
+          await fs.utimes(`${dst}.tmp`, st.atime, st.mtime);
+          await fs.rename(`${dst}.tmp`, dst);
+          return true;
+        })().catch(() => false);
+        if (await Promise.race([copy, sleep(left).then(() => false)])) copied.set(normPath(src), dst);
+      }
+    } catch {
+      // 예전 폴더가 없음
+    }
+    const remap = (p: string) => copied.get(normPath(p)) ?? p;
+    await updateSettings((cur) => ({
+      ...cur,
+      boardsMigrated: true,
+      lastFile: cur.lastFile ? remap(cur.lastFile) : cur.lastFile,
+      recent: (cur.recent ?? []).map(remap),
+    }));
+  })().catch((err) => console.error('board migration failed', err));
+  return migration;
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -305,6 +409,7 @@ function registerIpc() {
   ipcMain.handle('app:startup-file', async () => {
     const arg = fileArgFromArgv(process.argv);
     if (arg) return allow(arg);
+    await migrateBoards();
     const { lastFile } = await readSettings();
     return lastFile && existsSync(lastFile) ? allow(lastFile) : null;
   });
@@ -331,6 +436,7 @@ function registerIpc() {
   // ── 프로젝트 = 보드 파일 ──
   /** 문서/ThoughtFlow의 보드 + 다른 위치에서 열었던 보드. 최근 수정 순. */
   ipcMain.handle('projects:list', async () => {
+    await migrateBoards();
     const dir = boardsDir();
     await fs.mkdir(dir, { recursive: true });
     const files = new Map<string, string>();
@@ -360,17 +466,35 @@ function registerIpc() {
     return out.sort((a, b) => b.modifiedAt - a.modifiedAt);
   });
 
-  /** 새 프로젝트 파일 경로 (아직 만들지는 않음 — renderer가 빈 보드를 바로 저장한다) */
-  ipcMain.handle('projects:new-path', async (_e, rawName: string) => {
-    const name = cleanName(rawName);
-    const problem = nameProblem(name);
-    if (problem) return { error: problem };
+  /**
+   * 새 프로젝트 = 빈 보드 파일을 바로 만든다. 같은 이름이 있으면 "이름 2", "이름 3"…
+   * 파일을 먼저 만들고 나서 화면을 바꾸므로, 만들지 못하면 지금 보드가 그대로 남는다.
+   */
+  ipcMain.handle('projects:create', async (_e, rawName: unknown, content: string) => {
+    await migrateBoards();
+    const base = safeProjectName(typeof rawName === 'string' ? rawName : '') || '새 프로젝트';
     const dir = boardsDir();
-    await fs.mkdir(dir, { recursive: true });
-    const target = path.join(dir, `${name}.tflow`);
-    if (existsSync(target)) return { error: '같은 이름의 프로젝트가 이미 있습니다.' };
-    return { filePath: allow(target) };
+    try {
+      await fs.mkdir(dir, { recursive: true });
+      for (let i = 1; i < 1000; i++) {
+        const target = path.join(dir, `${i === 1 ? base : `${base} ${i}`}.tflow`);
+        if (existsSync(target)) continue;
+        try {
+          await fs.writeFile(target, content, { encoding: 'utf-8', flag: 'wx' });
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue;
+          throw err;
+        }
+        return { filePath: allow(target) };
+      }
+      return { error: '같은 이름의 프로젝트가 너무 많습니다. 다른 이름을 써 주세요.' };
+    } catch (err) {
+      return { error: `프로젝트 파일을 만들지 못했습니다. ${fsErrorText(err)}` };
+    }
   });
+
+  /** 프로젝트가 저장되는 폴더 (프로젝트 창 아래에 보여 준다) */
+  ipcMain.handle('projects:dir', () => boardsDir());
 
   ipcMain.handle('projects:rename', async (_e, filePath: string, rawName: string) => {
     const from = path.resolve(filePath);
@@ -437,6 +561,7 @@ if (!gotLock) {
   app.whenReady().then(() => {
     // 검은색 테마: 메뉴, 대화상자, Windows 제목 표시줄도 어둡게
     nativeTheme.themeSource = 'dark';
+    void migrateBoards();
     registerIpc();
     buildMenu();
     createWindow();

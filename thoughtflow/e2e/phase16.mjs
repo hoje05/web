@@ -150,6 +150,38 @@ try {
   const created = await call('create_project', { name: 'AI 프로젝트' });
   assert(!created.isError && (await win.textContent('[data-testid=project-name]')) === 'AI 프로젝트', 'create_project opens a new project');
   await call('add_flow', { boxes: [{ title: '새 주제' }] });
+
+  // 대화 정리 = 새 프로젝트 한 번에 (파일 이름에 못 쓰는 글자는 바꾸고, 같은 이름이면 번호를 붙인다)
+  const org = await call('create_project', {
+    name: '제주도: 여행 정리',
+    boxes: [
+      { key: 'a', title: '여행 가고 싶다' },
+      { key: 'b', title: '표가 비쌈', note: '왕복 40만원' },
+      { key: 'c', title: '배편 알아보기' },
+      { key: 'd', title: '날짜 바꾸기' },
+    ],
+    routes: [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'b', to: 'd' }],
+  });
+  s = await state(win);
+  assert(
+    !org.isError && s.filePath.endsWith('제주도 여행 정리.tflow') && Object.keys(s.doc.nodes).length === 4 && Object.keys(s.doc.edges).length === 3,
+    'create_project with boxes opens a new board holding the whole flow',
+  );
+  assert(text(org).includes("새 프로젝트 '제주도 여행 정리'") && text(org).includes('Box 4개와 Route 3개'), 'reply names the new project and what was added');
+  assert((await win.textContent('[data-testid=project-name]')) === '제주도 여행 정리', 'the app shows the new project');
+  await win.waitForFunction(() => {
+    const st = window.__tf.getState();
+    return st.doc === st.savedDoc && st.saveState === 'saved';
+  });
+  assert(JSON.parse(readFileSync(join(sandbox.boards, '제주도 여행 정리.tflow'), 'utf-8')).nodes.length === 4, 'the new project is saved in the local projects folder');
+  const again = await call('create_project', { name: '제주도: 여행 정리', boxes: [{ title: '두 번째 정리' }] });
+  assert(!again.isError && (await state(win)).filePath.endsWith('제주도 여행 정리 2.tflow'), 'same name gets a number instead of failing');
+  const badNew = await call('create_project', { name: '안 만들어짐', boxes: [{ key: 'x', title: 'X' }], routes: [{ from: 'x', to: 'nope' }] });
+  assert(
+    badNew.isError && !existsSync(join(sandbox.boards, '안 만들어짐.tflow')) && (await state(win)).filePath.endsWith('제주도 여행 정리 2.tflow'),
+    'a bad flow creates no project at all',
+  );
+
   const list = text(await call('list_projects'));
   assert(list.includes('AI 프로젝트') && list.includes('← 지금 열린 프로젝트') && /생각 흐름/.test(list), 'list_projects');
   const opened = await call('open_project', { name: '생각 흐름' });

@@ -15,6 +15,7 @@ export type CallTool = (tool: AiToolName, args: Record<string, unknown>, client:
 export const SERVER_INSTRUCTIONS = `ThoughtFlow is the user's desktop "thinking map": each Box holds one thought, action or result, and each Route (arrow) shows how one led to the next (thought → action → result → new thought). These tools read and edit the project that is currently open in the user's ThoughtFlow app.
 
 How to use it well:
+- Organizing a conversation: when the user asks to organize, summarize, map or record the conversation (e.g. "정리해줘", "ThoughtFlow에 정리"), put it in a NEW project: call create_project once with a short topic name AND the boxes/routes, so a fresh empty board opens with the whole flow on it. Only add to the currently open project (or open another with list_projects/open_project) when the user says so, e.g. "이어서", "지금 보드에", or names a project.
 - Ground the conversation in the board. When the user talks about their plans, ideas or anything they may have recorded, call get_board first and refer to their boxes by title. Use read_box for a box's full note and search_boxes to find related boxes.
 - Record the conversation's structure as it develops. When the discussion produces new thoughts, questions, decisions, actions or results, add them with add_flow (usually one call per conversational step; each call is a single undo step for the user).
   - Box title: short (about 5–40 characters), in the user's language. Put details, reasons and quotes in the note.
@@ -26,6 +27,21 @@ How to use it well:
 
 const boxRef = (what: string) =>
   z.string().min(1).describe(`${what}: a box id such as "n_abc123" from get_board (an exact, unique box title also works)`);
+
+const flowBoxes = z
+  .array(
+    z.object({
+      key: z.string().optional().describe('Name for this new box, used only inside this call to refer to it in routes'),
+      title: z.string().min(1).describe("Short text shown on the box (about 5–40 characters, in the user's language)"),
+      note: z.string().optional().describe('Longer details, reasons or quotes shown in the side panel'),
+    }),
+  )
+  .max(60);
+
+const flowRoutes = z
+  .array(z.object({ from: z.string().min(1), to: z.string().min(1) }))
+  .optional()
+  .describe('Routes (arrows) to draw: from → to. Omit to chain the boxes in order.');
 
 export function createMcpServer(call: CallTool, version: string): McpServer {
   const server = new McpServer({ name: 'thoughtflow', title: 'ThoughtFlow', version }, { instructions: SERVER_INSTRUCTIONS });
@@ -84,21 +100,8 @@ export function createMcpServer(call: CallTool, version: string): McpServer {
 - "after": an existing box id; every new box without an incoming route is connected after it.
 Example: {"after":"n_abc","boxes":[{"key":"q","title":"예산이 문제"},{"key":"a","title":"기차로 가기"},{"key":"b","title":"날짜 바꾸기"}],"routes":[{"from":"q","to":"a"},{"from":"q","to":"b"}]}`,
       inputSchema: {
-        boxes: z
-          .array(
-            z.object({
-              key: z.string().optional().describe('Name for this new box, used only inside this call to refer to it in routes'),
-              title: z.string().min(1).describe("Short text shown on the box (about 5–40 characters, in the user's language)"),
-              note: z.string().optional().describe('Longer details, reasons or quotes shown in the side panel'),
-            }),
-          )
-          .min(1)
-          .max(60)
-          .describe('New boxes, in flow order'),
-        routes: z
-          .array(z.object({ from: z.string().min(1), to: z.string().min(1) }))
-          .optional()
-          .describe('Routes (arrows) to draw: from → to. Omit to chain the boxes in order.'),
+        boxes: flowBoxes.min(1).describe('New boxes, in flow order'),
+        routes: flowRoutes,
         after: z.string().optional().describe('Existing box id to continue from'),
       },
       annotations: additive,
@@ -188,8 +191,15 @@ Example: {"after":"n_abc","boxes":[{"key":"q","title":"예산이 문제"},{"key"
     'create_project',
     {
       title: '새 프로젝트',
-      description: 'Create a new, empty project with this name and open it (the current one is saved first). Use for a clearly separate topic.',
-      inputSchema: { name: z.string().min(1).max(120).describe('Project name') },
+      description: `Open a brand-new, empty board as a new project (the current one is saved first) and, optionally, fill it with boxes and routes in the same step. This is the default way to organize a conversation.
+- name: short topic name in the user's language. If it is taken, a number is added ("여행 계획 2").
+- boxes/routes: same as add_flow (new box keys only — the new board has no other boxes). Without routes the boxes are chained in order.
+Example: {"name":"제주도 여행","boxes":[{"key":"a","title":"여행 가고 싶다"},{"key":"b","title":"비행기 표 비쌈","note":"왕복 40만원"},{"key":"c","title":"배편 알아보기"}],"routes":[{"from":"a","to":"b"},{"from":"b","to":"c"}]}`,
+      inputSchema: {
+        name: z.string().min(1).max(120).describe('Project name'),
+        boxes: flowBoxes.optional().describe('Boxes to put on the new board, in flow order'),
+        routes: flowRoutes,
+      },
       annotations: additive,
     },
     run('create_project'),
@@ -199,7 +209,7 @@ Example: {"after":"n_abc","boxes":[{"key":"q","title":"예산이 문제"},{"key"
     'organize_conversation',
     {
       title: '대화를 ThoughtFlow에 정리하기',
-      description: '지금까지의 대화를 ThoughtFlow 보드에 Box와 Route로 정리합니다.',
+      description: '지금까지의 대화를 ThoughtFlow의 새 프로젝트(빈 보드)에 Box와 Route로 정리합니다.',
     },
     () => ({
       messages: [
@@ -207,7 +217,7 @@ Example: {"after":"n_abc","boxes":[{"key":"q","title":"예산이 문제"},{"key"
           role: 'user' as const,
           content: {
             type: 'text' as const,
-            text: '지금까지 우리 대화의 흐름을 ThoughtFlow에 정리해줘. 먼저 get_board로 보드를 보고, 이미 있는 Box는 다시 만들지 말고 이어서 붙여 줘. 생각·질문·결정·행동·결과를 짧은 제목의 Box로 만들고, 어떤 생각에서 어떤 행동과 결과가 나왔는지 Route로 이어 줘.',
+            text: '지금까지 우리 대화의 흐름을 ThoughtFlow의 새 프로젝트에 정리해줘. create_project 한 번으로 주제 이름을 붙인 빈 보드를 만들고, 생각·질문·결정·행동·결과를 짧은 제목의 Box로, 어떤 생각에서 어떤 행동과 결과가 나왔는지를 Route로 함께 넣어 줘. 자세한 이유나 인용은 Box의 메모(note)에 적어 줘.',
           },
         },
       ],
