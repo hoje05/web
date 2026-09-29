@@ -1,0 +1,90 @@
+# ThoughtFlow: Windows에서 테스트하고 설치 파일(.exe)을 만든다.
+#  - 브랜치에 push → 테스트 + 설치 파일 (Actions 실행 화면의 Artifacts에서 받을 수 있음)
+#  - v로 시작하는 태그를 push (예: v0.6.0) → 위와 같고, 같은 이름의 GitHub Release에 설치 파일을 올린다
+name: ThoughtFlow
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    paths:
+      - 'thoughtflow/**'
+      - '.github/workflows/thoughtflow.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: thoughtflow-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: thoughtflow
+
+jobs:
+  windows:
+    name: Windows 테스트 · 설치 파일
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: thoughtflow/package-lock.json
+
+      - name: 부품 설치
+        run: npm ci
+
+      - name: 타입 검사
+        run: npm run typecheck
+
+      - name: 단위 테스트
+        run: npm test
+
+      - name: 실제 앱 조작 테스트 (e2e)
+        run: npm run e2e
+
+      - name: e2e 화면 기록 (실패했을 때)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-out
+          path: thoughtflow/e2e/out
+          if-no-files-found: ignore
+
+      - name: 설치 파일 만들기
+        run: npx electron-builder --win --publish never
+
+      - name: 설치 파일 보관
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThoughtFlow-Setup
+          path: thoughtflow/release/*.exe
+          retention-days: 30
+
+      - name: GitHub Release에 올리기
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "::error::태그($TAG)와 package.json 버전(v$VERSION)이 다릅니다. package.json의 version을 맞춰 주세요."
+            exit 1
+          fi
+          EXE="release/ThoughtFlow-Setup-$VERSION.exe"
+          NOTES="docs/release-notes/$TAG.md"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$EXE" --clobber
+          elif [ -f "$NOTES" ]; then
+            gh release create "$TAG" "$EXE" --verify-tag --title "ThoughtFlow $TAG" --notes-file "$NOTES"
+          else
+            gh release create "$TAG" "$EXE" --verify-tag --title "ThoughtFlow $TAG" --notes "Windows 설치 파일: ThoughtFlow-Setup-$VERSION.exe"
+          fi
