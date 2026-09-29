@@ -214,14 +214,13 @@ GitHub에 push하면 [GitHub Actions](../.github/workflows/thoughtflow.yml)가 W
 
 ## 새 버전 배포하기 (Release)
 
-1. `thoughtflow/package.json`의 `"version"`을 올립니다 (예: `0.6.0` → `0.6.1`). 바뀐 점은 `docs/release-notes/v0.6.1.md`에 적어 두면 Release 설명으로 쓰입니다.
-2. 커밋하고 같은 이름의 태그를 push합니다.
-   ```bash
-   git tag v0.6.1
-   git push origin v0.6.1
-   ```
-3. GitHub Actions가 Windows에서 테스트 → 설치 파일 빌드 → **Releases에 `ThoughtFlow-Setup-0.6.1.exe`를 올립니다** (약 5분).
-   태그와 `package.json` 버전이 다르면 올리지 않고 멈춥니다.
+GitHub 웹사이트에서 파일 두 개만 고쳐도 됩니다 (Git 명령 없이).
+
+1. `thoughtflow/package.json`의 `"version"`을 올립니다 (예: `0.6.0` → `0.6.1`).
+2. 바뀐 점을 적은 **`thoughtflow/docs/release-notes/v0.6.1.md`** 를 새로 만듭니다 (Release 설명으로 쓰입니다).
+3. 커밋(push)하면 GitHub Actions가 Windows에서 테스트 → 설치 파일 빌드 → **태그 `v0.6.1`과 Release를 만들고 `ThoughtFlow-Setup-0.6.1.exe`를 올립니다** (약 5분).
+   - 테스트가 하나라도 실패하면 배포하지 않습니다. 진행 상황은 저장소의 **Actions** 탭에서 볼 수 있습니다.
+   - 이미 배포된 버전이면 다시 올리지 않습니다. 태그 `v0.6.1`을 직접 push해도 같은 일이 일어납니다.
 
 ## 파일 형식 (`.tflow`)
 
