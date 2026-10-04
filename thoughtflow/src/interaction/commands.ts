@@ -1,0 +1,67 @@
+/**
+ * 단축키와 메뉴가 공유하는 명령.
+ */
+import { flushAndClose, newProject, openBoard, saveBoard, saveBoardAs } from '../persistence/fileService';
+import { arrangeBoard } from './arrange';
+import { useStore } from '../store/store';
+import { flushEditing } from './editing';
+
+export type Command =
+  | 'new'
+  | 'projects'
+  | 'open'
+  | 'save'
+  | 'saveAs'
+  | 'flushAndClose'
+  | 'find'
+  | 'undo'
+  | 'redo'
+  | 'delete'
+  | 'zoomIn'
+  | 'zoomOut'
+  | 'zoomReset'
+  | 'zoomFit'
+  | 'arrange'
+  | 'aiSettings';
+
+export function runCommand(command: string) {
+  const s = useStore.getState();
+  switch (command as Command) {
+    case 'new':
+      // 새 프로젝트: 텅 빈 새 보드를 바로 연다
+      return void newProject();
+    case 'projects':
+      return s.setDrawer(!s.drawerOpen);
+    case 'open':
+      return void openBoard();
+    case 'save':
+      return void saveBoard();
+    case 'saveAs':
+      return void saveBoardAs();
+    case 'flushAndClose':
+      return void flushAndClose();
+    case 'find':
+      return s.openSearch();
+    case 'undo':
+      flushEditing();
+      return useStore.getState().undo();
+    case 'redo':
+      flushEditing();
+      return useStore.getState().redo();
+    case 'delete':
+      if (s.editingNodeId) return;
+      return s.deleteSelection();
+    case 'zoomIn':
+      return s.zoomBy(1.2);
+    case 'zoomOut':
+      return s.zoomBy(1 / 1.2);
+    case 'zoomReset':
+      return s.zoomBy(1 / s.viewport.zoom);
+    case 'zoomFit':
+      return s.fitView();
+    case 'arrange':
+      return arrangeBoard();
+    case 'aiSettings':
+      return s.setAiSettingsOpen(true);
+  }
+}

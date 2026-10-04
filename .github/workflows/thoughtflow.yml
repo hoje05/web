@@ -1,0 +1,104 @@
+# ThoughtFlow: Windows에서 테스트하고 설치 파일(.exe)을 만든다.
+#  - push할 때마다 → 테스트 + 설치 파일 (Actions 실행 화면의 Artifacts에서 받을 수 있음)
+#  - 새 버전 배포: package.json의 version을 올리고 docs/release-notes/v<버전>.md를 넣어 push하면
+#    그 버전의 GitHub Release가 아직 없을 때 태그 v<버전>과 Release를 만들고 설치 파일을 올린다.
+#    (태그 v<버전>을 직접 push해도 된다)
+name: ThoughtFlow
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    paths:
+      - 'thoughtflow/**'
+      - '.github/workflows/thoughtflow.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: thoughtflow-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: thoughtflow
+
+jobs:
+  windows:
+    name: Windows 테스트 · 설치 파일
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: thoughtflow/package-lock.json
+
+      - name: 부품 설치
+        run: npm ci
+
+      - name: 타입 검사
+        run: npm run typecheck
+
+      - name: 단위 테스트
+        run: npm test
+
+      - name: 실제 앱 조작 테스트 (e2e)
+        run: npm run e2e
+
+      - name: e2e 화면 기록 (실패했을 때)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-out
+          path: thoughtflow/e2e/out
+          if-no-files-found: ignore
+
+      - name: 설치 파일 만들기
+        run: npx electron-builder --win --publish never
+
+      - name: 설치 파일 보관
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThoughtFlow-Setup
+          path: thoughtflow/release/*.exe
+          retention-days: 30
+
+      - name: GitHub Release에 올리기
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v$VERSION"
+          EXE="release/ThoughtFlow-Setup-$VERSION.exe"
+          NOTES="docs/release-notes/$TAG.md"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            if [ "$GITHUB_REF_NAME" != "$TAG" ]; then
+              echo "::error::태그($GITHUB_REF_NAME)와 package.json 버전($TAG)이 다릅니다. package.json의 version을 맞춰 주세요."
+              exit 1
+            fi
+          elif [ ! -f "$NOTES" ]; then
+            echo "$NOTES 가 없어 배포하지 않습니다 (새 버전을 배포하려면 이 파일을 넣어 push하세요)."
+            exit 0
+          fi
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+              gh release upload "$TAG" "$EXE" --clobber
+            else
+              echo "$TAG 는 이미 배포되어 있습니다."
+            fi
+            exit 0
+          fi
+          if [ -f "$NOTES" ]; then
+            gh release create "$TAG" "$EXE" --target "$GITHUB_SHA" --title "ThoughtFlow $TAG" --notes-file "$NOTES"
+          else
+            gh release create "$TAG" "$EXE" --target "$GITHUB_SHA" --title "ThoughtFlow $TAG" --notes "Windows 설치 파일: ThoughtFlow-Setup-$VERSION.exe"
+          fi
+          echo "배포 완료: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$TAG"
