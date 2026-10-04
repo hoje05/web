@@ -1,10 +1,12 @@
+import { arrangeBoard } from '../interaction/arrange';
 import { beginBoxPlacement } from '../interaction/boxPlacement';
 import { useStore } from '../store/store';
-import { BoxIcon, RouteIcon } from './icons';
+import { ArrangeIcon, BoxIcon, RouteIcon } from './icons';
 
 export function Toolbar() {
   const tool = useStore((s) => s.tool);
   const setTool = useStore((s) => s.setTool);
+  const boxes = useStore((s) => Object.keys(s.doc.nodes).length);
 
   return (
     // 버튼이 키보드 포커스를 가져가면 Space(Pan)/Enter(편집) 단축키와 충돌하므로 포커스를 주지 않는다
@@ -27,6 +29,17 @@ export function Toolbar() {
       >
         <RouteIcon />
         <span>Route</span>
+      </button>
+      <div className="toolbar-sep" />
+      <button
+        className="tool-button"
+        data-testid="tool-arrange"
+        title="정렬 — Box와 Route를 흐름 순서대로 보기 좋게 놓기 (Ctrl+Z로 되돌리기)"
+        disabled={boxes < 2}
+        onClick={arrangeBoard}
+      >
+        <ArrangeIcon />
+        <span>정렬</span>
       </button>
     </div>
   );

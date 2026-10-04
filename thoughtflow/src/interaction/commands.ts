@@ -2,6 +2,7 @@
  * 단축키와 메뉴가 공유하는 명령.
  */
 import { flushAndClose, newProject, openBoard, saveBoard, saveBoardAs } from '../persistence/fileService';
+import { arrangeBoard } from './arrange';
 import { useStore } from '../store/store';
 import { flushEditing } from './editing';
 
@@ -20,6 +21,7 @@ export type Command =
   | 'zoomOut'
   | 'zoomReset'
   | 'zoomFit'
+  | 'arrange'
   | 'aiSettings';
 
 export function runCommand(command: string) {
@@ -57,6 +59,8 @@ export function runCommand(command: string) {
       return s.zoomBy(1 / s.viewport.zoom);
     case 'zoomFit':
       return s.fitView();
+    case 'arrange':
+      return arrangeBoard();
     case 'aiSettings':
       return s.setAiSettingsOpen(true);
   }

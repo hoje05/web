@@ -36,9 +36,12 @@ export interface RouteGeom {
  * Box가 어디로 움직이든 그 위치에 어울리는 모양이 된다.
  */
 export function autoBezier(s: Vec, sSide: Side, e: Vec, eSide: Side): Bezier {
-  const k = clamp(dist(s, e) * 0.42, 24, 180);
+  let k = clamp(dist(s, e) * 0.42, 24, 180);
   const ns = sideNormal(sSide);
   const ne = sideNormal(eSide);
+  // 마주 보는 면(→ ←, ↓ ↑)끼리면 곡선이 두 면 사이에서만 휘게: 위아래로 멀리 떨어져도 옆 Box 쪽으로 넘어가지 않는다
+  const gap = (e.x - s.x) * ns.x + (e.y - s.y) * ns.y;
+  if (ns.x === -ne.x && ns.y === -ne.y && gap > 0) k = Math.min(k, Math.max(gap / 2, 8));
   return { p0: s, c1: { x: s.x + ns.x * k, y: s.y + ns.y * k }, c2: { x: e.x + ne.x * k, y: e.y + ne.y * k }, p3: e };
 }
 

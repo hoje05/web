@@ -88,6 +88,8 @@ function buildMenu() {
         item('축소', 'zoomOut', 'CmdOrCtrl+-'),
         item('100%', 'zoomReset', 'CmdOrCtrl+0'),
         item('전체 보기', 'zoomFit', 'Shift+1'),
+        { type: 'separator' },
+        item('정렬 (Box·Route를 흐름 순서대로)', 'arrange'),
         ...(app.isPackaged
           ? []
           : ([{ type: 'separator' }, { label: '개발자 도구', role: 'toggleDevTools' }] as MenuItemConstructorOptions[])),

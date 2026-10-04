@@ -12,6 +12,7 @@ Box에 생각·행동·결과를 적고, 방향이 있는 **Route**로 이어서
 - Box를 클릭하면 **오른쪽 창**에서 그 생각을 길게 적을 수 있고, 창 위쪽 **탭**으로 여러 생각을 오갈 수 있습니다.
   메모는 **Notion처럼** `/` 메뉴로 제목·목록·체크박스를 넣고, `# ` `- ` `[] ` 같은 바로 입력과 굵게·기울임을 쓸 수 있습니다. ([아래 참고](#메모-쓰기-notion처럼))
 - 서로 다른 내용은 **프로젝트**로 나눠 관리합니다. 왼쪽 위 버튼을 누르면 프로젝트 목록이 왼쪽에서 나옵니다.
+- 이리저리 흩어진 보드는 **정렬** 버튼 한 번으로 흐름 순서대로(왼쪽 → 오른쪽) 정리됩니다. ([아래 참고](#정렬))
 - 행동할 때마다 **자동 저장**됩니다. 로그인·클라우드 없이 **이 PC의 `사용자 폴더\ThoughtFlow`** 에 파일(`.tflow`)로 저장하는 Local-first 앱입니다.
 - **Claude·ChatGPT와 연결**하면 AI가 대화의 흐름을 보드에 Box와 Route로 정리하고, 보드에 적힌 생각을 바탕으로 대화합니다. 쓰고 있는 구독 계정 그대로, API 키 없이. ([아래 참고](#ai와-함께-쓰기-claude--chatgpt))
 - 검은색 테마.
@@ -70,6 +71,7 @@ npm run dist       # release/ThoughtFlow-Setup-<버전>.exe 생성
 | 선 정리 | 따로 할 일 없음 — 그린 선은 **자동으로 매끈하게** 정리되고(큰 곡선은 유지), 거의 곧게 그으면 깔끔한 연결선이 됨 |
 | Box를 옮기면 | 연결된 Route가 **새 위치에 맞게 자동으로 다시 이어짐** (위아래로 놓이면 아래↔위 면, 옆으로 놓이면 오른쪽↔왼쪽 면) |
 | 흐름 추적 | Box를 클릭하면 들어온 Route는 **보라**, 나간 Route는 **초록**으로 강조 |
+| **정렬** | 왼쪽 도구 막대의 **정렬**(또는 `⋯` → 보기 → 정렬) → Box와 Route를 흐름 순서대로 보기 좋게 놓기 · `Ctrl+Z` 한 번이면 원래대로 |
 | **검색** | `Ctrl+F` → 키워드가 제목이나 메모에 들어 있는 창 목록 표시 · Board에서 해당 Box 강조 · 결과를 누르면 그 창이 열리고 메모 안의 키워드가 표시됨 (`Enter` = 다음 결과, `Esc` = 닫기) |
 | 이동 / 삭제 | Box 본문 드래그 / Box·Route **우클릭 → 삭제** 또는 `Delete` (Box를 지우면 연결된 Route도 삭제) |
 | 화면 이동 | 빈 곳 드래그 · 휠 버튼 드래그 · `Space`+드래그 |
@@ -94,6 +96,22 @@ npm run dist       # release/ThoughtFlow-Setup-<버전>.exe 생성
   백신·동기화 프로그램이 파일을 잠깐 잡고 있으면 자동으로 다시 시도하고, 저장이 끝나지 않으면 15초 뒤 `저장 실패`로 알려 줍니다 (앱이 멈추지 않습니다).
 
 오른쪽 아래 `?` 버튼을 누르면 앱 안에서도 사용법을 볼 수 있습니다.
+
+### 정렬
+
+왼쪽 도구 막대의 **정렬** 버튼을 누르면 Box와 Route가 흐름 순서대로 다시 놓입니다. Box들은 새 자리로 부드럽게 움직입니다.
+
+| 정렬 전 | 정렬 후 |
+|---|---|
+| ![정렬 전](docs/images/arrange-before.png) | ![정렬 후](docs/images/arrange-after.png) |
+
+- **흐름은 왼쪽 → 오른쪽**: Box는 앞 Box보다 오른쪽 열에 놓이고, 이어진 Box끼리는 같은 높이에 맞춰집니다. 갈래는 위아래로 고르게 벌어지고, 다시 만나는 곳은 가운데로 모입니다.
+- **같은 열 안의 위아래 순서**는 원래 순서를 따르되, Route끼리 덜 엇갈리는 순서로 바뀝니다.
+- **Route**는 오른쪽 면에서 나가 다음 Box의 왼쪽 면으로 들어갑니다. 여러 열을 건너뛰는 Route와 되돌아가는 Route(순환)는 Box 사이의 빈 통로로 지나가서 다른 Box를 가로지르지 않습니다.
+- 이어지지 않은 묶음은 원래 위 → 아래 순서로 쌓이고, Route가 없는 Box는 맨 아래에 한 줄로 놓입니다.
+- 정렬은 원래 내용이 있던 자리(왼쪽 위)에서 시작하고, 다 보이지 않으면 화면도 함께 맞춥니다.
+- Box의 크기·글·메모는 그대로입니다. **`Ctrl+Z` 한 번**(또는 알림의 **되돌리기**)이면 정렬 전 모양과 손으로 그린 Route 곡선까지 그대로 돌아옵니다.
+- 이미 정렬된 보드에서 다시 누르면 아무것도 바뀌지 않습니다. 단축키는 없습니다(기존 단축키와 겹치지 않게).
 
 ### 메모 쓰기 (Notion처럼)
 
@@ -232,6 +250,7 @@ src/interaction/ hit test, pointer 상태 머신, 단축키, 명령
 src/persistence/ .tflow 파일 형식(검증 포함), 열기/저장/자동 저장
 src/components/  Board, BoxView, RouteView, Toolbar, TitleBar(프로그램 바), ProjectDrawer(프로젝트 창), SidePanel(오른쪽 창·탭), SearchBar, SaveStatus, AiSettings(AI 연결 창), AiToast …
 src/editor/      메모 편집기(Tiptap): 블록·"/" 메뉴·서식 막대(NoteEditor, extensions), 메모 ↔ Markdown 변환(markdown)
+src/layout/      정렬: 층으로 나누는 배치(열·순서·세로 맞춤·건너뛰는 Route의 통로) — arrange.ts
 src/ai/          AI가 보드를 읽고 고치는 함수(boardOps), 자동 배치(layout), 요청 처리(aiBridge)
 mcp/             MCP 서버 정의(server.ts, 도구 목록) + Claude 데스크톱 확장 진입점(stdio.ts)
 electron/ai.ts   로컬 브리지(Claude), ChatGPT용 HTTPS 엔드포인트 + cloudflared 터널, AI 연결 설정
@@ -241,7 +260,7 @@ electron/ai.ts   로컬 브리지(Claude), ChatGPT용 HTTPS 엔드포인트 + cl
 
 ```bash
 npm run typecheck
-npm test           # 단위 테스트 (geometry, 보정 알고리즘, anchor, 파일 형식, undo, AI 보드 조작·자동 배치, 메모 Markdown 변환)
+npm test           # 단위 테스트 (geometry, 보정 알고리즘, anchor, 파일 형식, undo, AI 보드 조작·자동 배치, 메모 Markdown 변환, 정렬)
 # e2e는 테스트 전용 임시 폴더를 쓰므로 실제 프로젝트 폴더에 파일을 만들지 않습니다
 npm run e2e        # 실제 Electron 앱을 띄워 마우스/키보드로 조작하는 시나리오 (AI 연결은 실제 MCP 클라이언트로 확인)
 ```
