@@ -236,16 +236,30 @@ function decodeText(buf: Buffer): string {
   }
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Windows에서 백신·검색 색인이 방금 만든 파일을 잠깐 잡고 있으면 이름 바꾸기가 막힌다 → 몇 번 다시 */
+async function renameRetry(a: string, b: string) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fs.rename(a, b);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? '';
+      if (!['EPERM', 'EBUSY', 'EACCES'].includes(code) || attempt >= 8) throw err;
+      await sleep(80 * attempt);
+    }
+  }
+}
+
 /** 프로젝트 이름을 바꿀 때 자료 폴더도 함께 (먼저 옮기고, 프로젝트 파일 이름 바꾸기가 실패하면 되돌린다) */
 export async function renameAssetDir(from: string, to: string, renameProjectFile: () => Promise<void>) {
   const a = assetDirOf(from);
   const b = assetDirOf(to);
   const move = existsSync(a) && path.resolve(a) !== path.resolve(b) && !existsSync(b);
-  if (move) await fs.rename(a, b);
+  if (move) await renameRetry(a, b);
   try {
     await renameProjectFile();
   } catch (err) {
-    if (move) await fs.rename(b, a).catch(() => undefined);
+    if (move) await renameRetry(b, a).catch(() => undefined);
     throw err;
   }
 }

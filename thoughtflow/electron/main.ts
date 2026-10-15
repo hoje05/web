@@ -518,7 +518,11 @@ function registerIpc() {
     if (samePath(from, to) && from === to) return { filePath: from };
     if (existsSync(to) && !samePath(from, to)) return { error: '같은 이름의 프로젝트가 이미 있습니다.' };
     // 첨부 자료 폴더("이름.assets")도 함께 이름을 바꾼다
-    await renameAssetDir(from, to, () => fs.rename(from, to));
+    try {
+      await renameAssetDir(from, to, () => fs.rename(from, to));
+    } catch (err) {
+      return { error: `이름을 바꾸지 못했습니다. ${fsErrorText(err)}` };
+    }
     allow(to);
     await updateSettings((cur) => ({
       ...cur,

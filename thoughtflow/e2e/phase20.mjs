@@ -8,6 +8,8 @@ const st = () => win.evaluate(() => {
   return { activeTab: s.activeTab, selection: s.selection, tabs: s.tabs };
 });
 const scrollLeft = () => win.$eval('.panel-tabs', (el) => el.scrollLeft);
+/** 화면 배율에 따라 scrollLeft가 소수일 수 있다 */
+const near = (a, b) => Math.abs(a - b) <= 1;
 
 try {
   // 탭이 창 폭을 넘도록 Box 14개를 열어 둔다
@@ -35,10 +37,10 @@ try {
   await win.mouse.move(bar.x + bar.width - 40, y);
   await win.mouse.down();
   for (let i = 1; i <= 10; i++) await win.mouse.move(bar.x + bar.width - 40 - i * 20, y);
-  assert((await scrollLeft()) === 200, `the tab list follows the mouse exactly (200px → ${await scrollLeft()})`);
+  assert(near(await scrollLeft(), 200), `the tab list follows the mouse exactly (200px → ${await scrollLeft()})`);
   // 탭 줄 밖으로 나가도 계속 따라온다
   await win.mouse.move(bar.x + bar.width - 40 - 260, y + 120);
-  assert((await scrollLeft()) === 260, 'keeps following outside the bar');
+  assert(near(await scrollLeft(), 260), 'keeps following outside the bar');
   await win.mouse.up();
   const lastVisible = await win.evaluate(() => {
     const bar = document.querySelector('.panel-tabs').getBoundingClientRect();
@@ -53,7 +55,7 @@ try {
   await win.mouse.down();
   for (let i = 1; i <= 15; i++) await win.mouse.move(bar.x + 60 + i * 20, y);
   await win.mouse.up();
-  assert((await scrollLeft()) === 0, 'dragging right brings the first tabs back');
+  assert(near(await scrollLeft(), 0), 'dragging right brings the first tabs back');
 
   // ── Scenario 2: 탭 위에서 끌면 목록만 움직이고 그 탭은 열리지 않는다
   const tab = await win.locator('[data-testid=panel-tab]').nth(3).boundingBox();
@@ -63,7 +65,7 @@ try {
   for (let i = 1; i <= 8; i++) await win.mouse.move(tab.x + tab.width / 2 - i * 15, ty);
   await win.mouse.up();
   let s = await st();
-  assert((await scrollLeft()) === 120, `dragging on a tab scrolls the list (${await scrollLeft()})`);
+  assert(near(await scrollLeft(), 120), `dragging on a tab scrolls the list (${await scrollLeft()})`);
   assert(s.activeTab === 'n0' && s.selection?.id === 'n0', 'the tab under the drag is not opened');
   // × 위에서 끌어도 탭은 닫히지 않는다
   const close = await win.locator('[data-testid=panel-tab].is-active .panel-tab-close').boundingBox();
@@ -84,7 +86,7 @@ try {
   await win.mouse.up();
   s = await st();
   assert(s.activeTab === 'n1' && s.selection?.id === 'n1', `a short click opens the tab and selects its box (${JSON.stringify(s)})`);
-  assert((await scrollLeft()) === 0, 'a click does not scroll the list');
+  assert(near(await scrollLeft(), 0), 'a click does not scroll the list');
   await win.click('[data-testid=panel-tab]:has-text("생각 3번")');
   assert((await st()).activeTab === 'n2', 'ordinary clicks still switch tabs');
   await win.click('[data-testid=panel-tab]:has-text("생각 3번") .panel-tab-close');
