@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, type Men
 import { existsSync, promises as fs } from 'fs';
 import * as path from 'path';
 import { setupAi, shutdownAi, watchRenderer, type StoredAi } from './ai';
+import { copyAssetDir, registerAssetScheme, renameAssetDir, setupAssets, trashAssetDir } from './assets';
 
 const FILE_FILTERS = [
   { name: 'ThoughtFlow Board', extensions: ['tflow'] },
@@ -10,6 +11,8 @@ const FILE_FILTERS = [
 
 // 테스트에서 사용자 데이터/보드 폴더를 분리하기 위한 환경 변수
 if (process.env.THOUGHTFLOW_USER_DATA) app.setPath('userData', process.env.THOUGHTFLOW_USER_DATA);
+// 첨부 이미지를 보여 주는 tfasset:// (창을 만들기 전에 등록)
+registerAssetScheme();
 
 /**
  * 프로젝트(보드 파일) 폴더: 사용자 폴더/ThoughtFlow (예: C:\Users\이름\ThoughtFlow).
@@ -79,6 +82,8 @@ function buildMenu() {
         { type: 'separator' },
         item('찾기', 'find', 'CmdOrCtrl+F'),
         item('삭제', 'delete', 'Delete'),
+        { type: 'separator' },
+        item('저장된 태그 관리…', 'tagManager'),
       ],
     },
     {
@@ -364,7 +369,7 @@ function registerIpc() {
 
   ipcMain.handle(
     'file:save',
-    async (_e, args: { filePath: string | null; content: string; suggestedName: string }) => {
+    async (_e, args: { filePath: string | null; content: string; suggestedName: string; assetsFrom?: string | null }) => {
       let target = args.filePath ? path.resolve(args.filePath) : null;
       if (target && !allowedPaths.has(target)) throw new Error('허용되지 않은 저장 경로입니다.');
       if (!target) {
@@ -377,6 +382,11 @@ function registerIpc() {
         target = allow(result.filePath);
       }
       await writeAtomic(target, args.content);
+      // 다른 이름으로 저장: 첨부 자료 폴더도 새 위치로 복사 (원래 프로젝트는 그대로)
+      const from = args.assetsFrom ? path.resolve(args.assetsFrom) : null;
+      if (from && allowedPaths.has(from) && !samePath(from, target)) {
+        await copyAssetDir(from, target).catch((err) => console.error('asset copy failed', err));
+      }
       return { canceled: false, filePath: target };
     },
   );
@@ -507,7 +517,8 @@ function registerIpc() {
     const to = path.join(path.dirname(from), `${name}${path.extname(from) || '.tflow'}`);
     if (samePath(from, to) && from === to) return { filePath: from };
     if (existsSync(to) && !samePath(from, to)) return { error: '같은 이름의 프로젝트가 이미 있습니다.' };
-    await fs.rename(from, to);
+    // 첨부 자료 폴더("이름.assets")도 함께 이름을 바꾼다
+    await renameAssetDir(from, to, () => fs.rename(from, to));
     allow(to);
     await updateSettings((cur) => ({
       ...cur,
@@ -537,6 +548,7 @@ function registerIpc() {
       await dialog.showMessageBox(mainWindow!, { type: 'error', title: 'ThoughtFlow', message: `휴지통으로 옮기지 못했습니다.\n${String(err)}` });
       return { deleted: false };
     }
+    await trashAssetDir(target);
     await forgetFile(target);
     return { deleted: true };
   });
@@ -565,6 +577,7 @@ if (!gotLock) {
     nativeTheme.themeSource = 'dark';
     void migrateBoards();
     registerIpc();
+    setupAssets({ isAllowed: (p) => allowedPaths.has(path.resolve(p)), getWindow: () => mainWindow });
     buildMenu();
     createWindow();
     void setupAi({

@@ -1,5 +1,19 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import type { AiRequest, AiResponse, AiSettings, AiState } from '../src/ai/protocol';
+
+type AttachResult = {
+  attachments: {
+    id: string;
+    type: 'image' | 'file';
+    name: string;
+    relativePath: string;
+    mimeType: string;
+    size: number;
+    width?: number;
+    height?: number;
+  }[];
+  errors: string[];
+};
 
 /**
  * Renderer가 사용할 수 있는 유일한 OS API.
@@ -17,6 +31,8 @@ const api = {
     filePath: string | null;
     content: string;
     suggestedName: string;
+    /** 다른 이름으로 저장할 때 첨부 자료 폴더를 복사해 올 원래 프로젝트 */
+    assetsFrom?: string | null;
   }): Promise<{ canceled: true } | { canceled: false; filePath: string }> => ipcRenderer.invoke('file:save', args),
   alert: (message: string): Promise<void> => ipcRenderer.invoke('app:alert', message),
   confirm: (message: string): Promise<boolean> => ipcRenderer.invoke('app:confirm', message),
@@ -51,6 +67,27 @@ const api = {
     ipcRenderer.invoke('projects:rename', filePath, name),
   deleteProject: (filePath: string): Promise<{ deleted: boolean }> => ipcRenderer.invoke('projects:delete', filePath),
   revealProjects: (): Promise<void> => ipcRenderer.invoke('projects:reveal'),
+
+  // ── Box 첨부 (프로젝트 옆 "이름.assets" 폴더, 이 PC 안) ──
+  attachPick: (projectPath: string, kind: 'image' | 'any'): Promise<AttachResult> => ipcRenderer.invoke('attach:pick', projectPath, kind),
+  attachPaths: (projectPath: string, paths: string[]): Promise<AttachResult> => ipcRenderer.invoke('attach:paths', projectPath, paths),
+  attachData: (projectPath: string, items: { name: string; mimeType: string; data: Uint8Array }[]): Promise<AttachResult> =>
+    ipcRenderer.invoke('attach:data', projectPath, items),
+  attachOpen: (projectPath: string, relativePath: string): Promise<{ ok: true } | { error: string }> =>
+    ipcRenderer.invoke('attach:open', projectPath, relativePath),
+  attachReveal: (projectPath: string, relativePath: string): Promise<{ ok: true } | { error: string }> =>
+    ipcRenderer.invoke('attach:reveal', projectPath, relativePath),
+  attachReadText: (projectPath: string, relativePath: string): Promise<{ text: string; truncated: boolean } | { error: string }> =>
+    ipcRenderer.invoke('attach:read-text', projectPath, relativePath),
+  attachGc: (projectPath: string, keep: string[]): Promise<{ removed: number }> => ipcRenderer.invoke('attach:gc', projectPath, keep),
+  /** 끌어다 놓은 파일의 실제 경로 (없으면 빈 문자열) */
+  pathForFile: (file: File): string => {
+    try {
+      return webUtils.getPathForFile(file);
+    } catch {
+      return '';
+    }
+  },
 
   // ── AI 연결 (Claude · ChatGPT) ──
   onAiRequest: (callback: (req: AiRequest & { id: number }) => void) => {

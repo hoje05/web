@@ -62,6 +62,7 @@ export const BoxView = memo(function BoxView({ node, selected, editing, borderHo
           {node.text || <span className="box-placeholder">내용 입력</span>}
         </div>
       )}
+      <BoxMeta node={node} />
       {node.note.trim() && <span className="box-note-mark" title="메모 있음" />}
       {node.origin && (
         <span className="box-ai-mark" title={`${node.origin}가 만든 Box`} data-testid="box-ai-mark">
@@ -75,6 +76,51 @@ export const BoxView = memo(function BoxView({ node, selected, editing, borderHo
     </div>
   );
 });
+
+/** Board 위 Box에는 태그 몇 개(+N)와 첨부 개수만 작게 — 흐름이 한눈에 보이도록 Box를 키우지 않는다 */
+const BOARD_TAGS = 2;
+
+function BoxMeta({ node }: { node: BoxNode }) {
+  const tags = useStore((s) => s.doc.tags);
+  const ids = (node.tagIds ?? []).filter((id) => tags?.[id]);
+  const atts = node.attachments ?? [];
+  if (!ids.length && !atts.length) return null;
+  const images = atts.filter((a) => a.type === 'image').length;
+  const files = atts.length - images;
+  const more = ids.length - BOARD_TAGS;
+  return (
+    <div className="box-meta" data-testid="box-meta">
+      {ids.slice(0, BOARD_TAGS).map((id) => (
+        <span key={id} className={`box-tag${tags[id].active ? '' : ' is-archived'}`} data-testid="box-tag">
+          {tags[id].name}
+        </span>
+      ))}
+      {more > 0 && (
+        <span className="box-tag box-tag-more" title={ids.slice(BOARD_TAGS).map((id) => tags[id].name).join(', ')} data-testid="box-tag-more">
+          +{more}
+        </span>
+      )}
+      {images > 0 && (
+        <span className="box-attach" title={`이미지 ${images}개`} data-testid="box-images">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
+            <rect x="2" y="3" width="12" height="10" rx="1.5" />
+            <circle cx="6" cy="6.5" r="1.2" />
+            <path d="M2.5 12l3.5-3.5 2.5 2.5 2-2 3 3" />
+          </svg>
+          {images}
+        </span>
+      )}
+      {files > 0 && (
+        <span className="box-attach" title={`파일 ${files}개`} data-testid="box-files">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+            <path d="M10.5 4.5 5.8 9.2a1.4 1.4 0 0 0 2 2l5-5a2.6 2.6 0 0 0-3.7-3.7l-5 5a3.8 3.8 0 0 0 5.4 5.4l4.2-4.2" />
+          </svg>
+          {files}
+        </span>
+      )}
+    </div>
+  );
+}
 
 /**
  * 편집 중에는 React가 텍스트를 관리하지 않는다 (contentEditable과 React 재조정 충돌 방지).

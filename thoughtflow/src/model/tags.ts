@@ -77,10 +77,10 @@ export function setTagActive(doc: Doc, tagId: string, active: boolean): Doc {
  * 보관된 태그와 이미 붙은 태그는 빼고, 빈 입력이면 저장된 태그 전부 (최근에 만든 것부터).
  * 저장된 태그 목록만 훑는다 (Box 전체를 훑지 않는다).
  */
-export function suggestTags(doc: Doc, query: string, exclude: readonly string[] = [], limit = 8): Tag[] {
+export function suggestTags(tags: Record<string, Tag> | undefined, query: string, exclude: readonly string[] = [], limit = 8): Tag[] {
   const q = normalizeTagName(query);
   const skip = new Set(exclude);
-  const active = Object.values(tagsOf(doc)).filter((t) => t.active && !skip.has(t.id));
+  const active = Object.values(tags ?? {}).filter((t) => t.active && !skip.has(t.id));
   if (!q) return active.reverse().slice(0, limit);
   const prefix: Tag[] = [];
   const includes: Tag[] = [];

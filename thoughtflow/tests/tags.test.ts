@@ -43,7 +43,7 @@ describe('tags', () => {
     expect(doc.nodes.b.tagIds).toBeUndefined();
     expect(doc.nodes.a.tagIds).toEqual([id]);
     expect(doc.tags[id].active).toBe(true);
-    expect(suggestTags(doc, 'a', doc.nodes.c.tagIds).map((t) => t.name)).toEqual(['AI']);
+    expect(suggestTags(doc.tags, 'a', doc.nodes.c.tagIds).map((t) => t.name)).toEqual(['AI']);
   });
 
   it('archiving a saved tag keeps it on boxes but hides it from suggestions; re-creating revives the same id', () => {
@@ -51,8 +51,8 @@ describe('tags', () => {
     const id = Object.keys(doc.tags)[0];
     doc = setTagActive(doc, id, false);
     expect(doc.nodes.a.tagIds).toEqual([id]);
-    expect(suggestTags(doc, 'a')).toEqual([]);
-    expect(suggestTags(doc, '')).toEqual([]);
+    expect(suggestTags(doc.tags, 'a')).toEqual([]);
+    expect(suggestTags(doc.tags, '')).toEqual([]);
     const r = must(addTagByName(doc, 'b', 'ai'));
     expect(r.tag.id).toBe(id);
     expect(Object.keys(r.doc.tags)).toEqual([id]);
@@ -63,13 +63,13 @@ describe('tags', () => {
   it('suggests prefix matches first, then includes, case-insensitive', () => {
     let doc = base();
     for (const n of ['Project', 'Programming', 'Prototype', 'Improve', 'Game', 'AI']) doc = must(addTagByName(doc, 'a', n)).doc;
-    expect(suggestTags(doc, 'pro').map((t) => t.name)).toEqual(['Programming', 'Project', 'Prototype', 'Improve']);
-    expect(suggestTags(doc, 'PRO').length).toBe(4);
+    expect(suggestTags(doc.tags, 'pro').map((t) => t.name)).toEqual(['Programming', 'Project', 'Prototype', 'Improve']);
+    expect(suggestTags(doc.tags, 'PRO').length).toBe(4);
     // 이미 붙은 태그는 빼고
     const project = Object.values(doc.tags).find((t) => t.name === 'Project')!;
-    expect(suggestTags(doc, 'pro', [project.id]).map((t) => t.name)).not.toContain('Project');
+    expect(suggestTags(doc.tags, 'pro', [project.id]).map((t) => t.name)).not.toContain('Project');
     // 빈 입력: 저장된 태그 전부 (최근 것부터)
-    expect(suggestTags(doc, '', [], 3).map((t) => t.name)).toEqual(['AI', 'Game', 'Improve']);
+    expect(suggestTags(doc.tags, '', [], 3).map((t) => t.name)).toEqual(['AI', 'Game', 'Improve']);
   });
 
   it('counts usage and survives box deletion', () => {

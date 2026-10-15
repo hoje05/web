@@ -64,6 +64,12 @@ export interface AppState extends History {
   aiSettingsOpen: boolean;
   setAiSettingsOpen: (open: boolean) => void;
 
+  // ── 첨부 미리보기 · 태그 관리 창 ──
+  preview: { nodeId: string; attachmentId: string } | null;
+  setPreview: (preview: AppState['preview']) => void;
+  tagManagerOpen: boolean;
+  setTagManagerOpen: (open: boolean) => void;
+
   // ── 프로젝트 창 (왼쪽에서 스르륵) ──
   drawerOpen: boolean;
   setDrawer: (open: boolean) => void;
@@ -165,6 +171,10 @@ export const useStore = create<AppState>()((set, get) => ({
   aiSettingsOpen: false,
   setAiSettingsOpen: (aiSettingsOpen) => set({ aiSettingsOpen }),
   setDrawer: (drawerOpen) => set({ drawerOpen }),
+  preview: null,
+  setPreview: (preview) => set({ preview }),
+  tagManagerOpen: false,
+  setTagManagerOpen: (tagManagerOpen) => set({ tagManagerOpen }),
 
   commit: (next) =>
     set((s) => (next === s.doc ? {} : { doc: next, past: pushPast(s.past, s.doc), future: [] })),
@@ -216,6 +226,8 @@ export const useStore = create<AppState>()((set, get) => ({
       contextMenu: null,
       aiActivity: null,
       aiFlash: [],
+      preview: null,
+      tagManagerOpen: false,
     });
     get().closePanel();
     set({ tabs: [], activeTab: null, panelDismissed: false });
@@ -224,6 +236,8 @@ export const useStore = create<AppState>()((set, get) => ({
     set({
       aiActivity: null,
       aiFlash: [],
+      preview: null,
+      tagManagerOpen: false,
       doc,
       savedDoc: doc,
       filePath,

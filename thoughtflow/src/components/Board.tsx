@@ -1,6 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { DEFAULT_BOX_HEIGHT, DEFAULT_BOX_WIDTH } from '../model/types';
+import { nodeAt } from '../interaction/hitTest';
 import { useBoardInteraction } from '../interaction/useBoardInteraction';
+import { attachFiles, filesOf, hasFiles } from '../persistence/attachments';
+import { screenToWorld } from '../viewport/viewport';
 import { getRouteGeometry } from '../routing/routeGeometry';
 import { nodeMatches, useStore } from '../store/store';
 import { BoxView } from './BoxView';
@@ -44,6 +47,8 @@ export function Board() {
   const activePage = useStore((s) => (s.panelOpen ? s.activeTab : null));
   const aiFlash = useStore((s) => s.aiFlash);
   useBoardInteraction(boardRef);
+  /** 파일을 끌고 있는 아래의 Box (놓으면 그 Box에 첨부) */
+  const [fileDrop, setFileDrop] = useState<string | null>(null);
   const geoms = getRouteGeometry(doc);
   const routes = Object.values(doc.edges)
     .map((e) => ({ edge: e, geom: geoms.get(e.id), role: routeRole(e, selection) }))
@@ -68,6 +73,11 @@ export function Board() {
     .filter(Boolean)
     .join(' ');
   const hoverNodeId = hover.kind === 'node-border' || hover.kind === 'node-body' ? hover.nodeId : null;
+  const boxUnder = (e: DragEvent) => {
+    const r = boardRef.current!.getBoundingClientRect();
+    const s = useStore.getState();
+    return nodeAt(s.doc, screenToWorld(s.viewport, { x: e.clientX - r.left, y: e.clientY - r.top }), s.viewport.zoom);
+  };
 
   return (
     <div
@@ -75,6 +85,30 @@ export function Board() {
       className={className}
       style={{ ...gridStyle(zoom, panX, panY), cursor: cursorFor(hover.kind, tool) }}
       data-testid="board"
+      // 파일을 Box 위에 끌어다 놓으면 그 Box에 첨부하고 오른쪽 창을 연다
+      onDragOver={(e) => {
+        if (!hasFiles(e.dataTransfer)) return;
+        const id = boxUnder(e);
+        if (id) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        }
+        if (id !== fileDrop) setFileDrop(id);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFileDrop(null);
+      }}
+      onDrop={(e) => {
+        setFileDrop(null);
+        const id = hasFiles(e.dataTransfer) ? boxUnder(e) : null;
+        if (!id) return;
+        e.preventDefault();
+        const files = filesOf(e.dataTransfer);
+        const s = useStore.getState();
+        s.select({ kind: 'node', id });
+        s.openPage(id, { force: true });
+        void attachFiles(id, files);
+      }}
     >
       <svg className="layer layer-edges">
         <g transform={svgTransform}>
@@ -97,7 +131,7 @@ export function Board() {
             selected={selection?.kind === 'node' && selection.id === n.id}
             editing={editingNodeId === n.id}
             borderHover={hoverNodeId === n.id && (hover.kind === 'node-border' || tool === 'route')}
-            dropTarget={draft?.targetNodeId === n.id}
+            dropTarget={draft?.targetNodeId === n.id || fileDrop === n.id}
             search={searchQuery ? (nodeMatches(n, searchQuery) ? 'match' : 'dim') : null}
             active={activePage === n.id}
             aiNew={aiFlash.includes(n.id)}

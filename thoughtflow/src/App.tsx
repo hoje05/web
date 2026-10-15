@@ -2,11 +2,13 @@ import { useEffect } from 'react';
 import { handleAiRequest } from './ai/aiBridge';
 import { AiSettings } from './components/AiSettings';
 import { AiToast } from './components/AiToast';
+import { AttachmentPreview } from './components/AttachmentPreview';
 import { Board } from './components/Board';
 import { ContextMenu } from './components/ContextMenu';
 import { ProjectDrawer } from './components/ProjectDrawer';
 import { SearchBar } from './components/SearchBar';
 import { SidePanel } from './components/SidePanel';
+import { TagManager } from './components/TagManager';
 import { TitleBar } from './components/TitleBar';
 import { Toolbar } from './components/Toolbar';
 import { ZoomControls } from './components/ZoomControls';
@@ -58,6 +60,8 @@ export function App() {
           <AiToast />
         </div>
         <ProjectDrawer />
+        <AttachmentPreview />
+        <TagManager />
         <AiSettings />
       </div>
     </div>

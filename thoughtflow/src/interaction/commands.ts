@@ -22,6 +22,7 @@ export type Command =
   | 'zoomReset'
   | 'zoomFit'
   | 'arrange'
+  | 'tagManager'
   | 'aiSettings';
 
 export function runCommand(command: string) {
@@ -61,6 +62,9 @@ export function runCommand(command: string) {
       return s.fitView();
     case 'arrange':
       return arrangeBoard();
+    case 'tagManager':
+      flushEditing();
+      return s.setTagManagerOpen(true);
     case 'aiSettings':
       return s.setAiSettingsOpen(true);
   }

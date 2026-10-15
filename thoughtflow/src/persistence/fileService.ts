@@ -10,16 +10,17 @@
  */
 import { flushEditing } from '../interaction/editing';
 import type { AiRequest, AiResponse, AiSettings, AiState } from '../ai/protocol';
-import { EMPTY_DOC, type Doc } from '../model/types';
+import { EMPTY_DOC, type Attachment, type Doc } from '../model/types';
 import { useStore } from '../store/store';
-import { FILE_EXTENSION, parseBoard, serializeBoard } from './fileFormat';
+import { attachmentPaths, FILE_EXTENSION, parseBoard, serializeBoard } from './fileFormat';
 
 type SaveResult = { canceled: true } | { canceled: false; filePath: string };
+export type AttachResult = { attachments: Attachment[]; errors: string[] };
 type Api = {
   openFile: () => Promise<{ canceled: true } | { canceled: false; filePath: string; content: string }>;
   readFile: (filePath: string) => Promise<{ filePath: string; content: string }>;
   newBoardPath: () => Promise<string>;
-  saveFile: (args: { filePath: string | null; content: string; suggestedName: string }) => Promise<SaveResult>;
+  saveFile: (args: { filePath: string | null; content: string; suggestedName: string; assetsFrom?: string | null }) => Promise<SaveResult>;
   alert: (message: string) => Promise<void>;
   confirm: (message: string) => Promise<boolean>;
   startupFile: () => Promise<string | null>;
@@ -40,6 +41,15 @@ type Api = {
   renameProject: (filePath: string, name: string) => Promise<{ filePath: string } | { error: string }>;
   deleteProject: (filePath: string) => Promise<{ deleted: boolean }>;
   revealProjects: () => Promise<void>;
+  // ── Box 첨부 ──
+  attachPick: (projectPath: string, kind: 'image' | 'any') => Promise<AttachResult>;
+  attachPaths: (projectPath: string, paths: string[]) => Promise<AttachResult>;
+  attachData: (projectPath: string, items: { name: string; mimeType: string; data: Uint8Array }[]) => Promise<AttachResult>;
+  attachOpen: (projectPath: string, relativePath: string) => Promise<{ ok: true } | { error: string }>;
+  attachReveal: (projectPath: string, relativePath: string) => Promise<{ ok: true } | { error: string }>;
+  attachReadText: (projectPath: string, relativePath: string) => Promise<{ text: string; truncated: boolean } | { error: string }>;
+  attachGc: (projectPath: string, keep: string[]) => Promise<{ removed: number }>;
+  pathForFile: (file: File) => string;
   // ── AI 연결 ──
   onAiRequest: (cb: (req: AiRequest & { id: number }) => void) => () => void;
   aiRespond: (id: number, res: AiResponse) => void;
@@ -215,6 +225,7 @@ export async function saveBoardAs(): Promise<boolean> {
       filePath: null,
       content: serializeBoard(s.doc, s.viewport, s.uiState()),
       suggestedName: s.filePath ? fileName(s.filePath) : `생각 흐름.${FILE_EXTENSION}`,
+      assetsFrom: s.filePath,
     });
     if (res.canceled) return false;
     useStore.getState().markSaved(res.filePath, s.doc);
@@ -232,6 +243,8 @@ function loadContent(filePath: string, content: string) {
   useStore.getState().loadBoard(doc, viewport, filePath, ui);
   desktopApi?.setLastFile(filePath);
   if (warnings.length) void alertUser(`파일 일부를 복구하지 못했습니다.\n${[...new Set(warnings)].join('\n')}`);
+  // 자료 폴더 정리: 지난번에 빼낸 첨부의 파일 (이제 Undo로 되살릴 일이 없다). 파일을 온전히 읽었을 때만.
+  else void desktopApi?.attachGc(filePath, attachmentPaths(doc)).catch(() => undefined);
 }
 
 /**

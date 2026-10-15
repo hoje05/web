@@ -1,8 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type React from 'react';
 import { NoteEditor, type NoteEditorHandle } from '../editor/NoteEditor';
+import { attachFiles, filesOf, hasFiles } from '../persistence/attachments';
+import { BoxProps } from './BoxProps';
 import { incomingEdges, outgoingEdges } from '../model/graph';
 import type { BoxNode, Doc } from '../model/types';
+import { isActiveSession, setActiveSession } from '../interaction/editSession';
 import { nodeMatches, useStore } from '../store/store';
 
 /**
@@ -164,9 +167,11 @@ function useDragScroll(ref: React.RefObject<HTMLDivElement | null>) {
 function useEditSession() {
   const before = useRef<Doc | null>(null);
   const changed = useRef(false);
+  const self = useRef<{ begin: () => void; end: () => void } | null>(null);
   const begin = () => {
     before.current = useStore.getState().doc;
     changed.current = false;
+    setActiveSession(self.current);
   };
   const touch = () => {
     if (!before.current) begin();
@@ -176,7 +181,9 @@ function useEditSession() {
     if (before.current && changed.current) useStore.getState().commitFrom(before.current);
     before.current = null;
     changed.current = false;
+    if (self.current && isActiveSession(self.current)) setActiveSession(null);
   };
+  self.current ??= { begin: () => begin(), end: () => end() };
   useEffect(() => end, []);
   return { begin, touch, end };
 }
@@ -215,9 +222,39 @@ function PageEditor({ node, query }: { node: BoxNode; query: string }) {
   const incoming = incomingEdges(doc, node.id);
   const outgoing = outgoingEdges(doc, node.id);
   const s = useStore.getState();
+  const [dropping, setDropping] = useState(false);
 
   return (
-    <div className="panel-page" data-testid="panel-page">
+    <div
+      className={`panel-page${dropping ? ' is-drop-target' : ''}`}
+      data-testid="panel-page"
+      // 파일을 끌어다 놓으면 이 Box에 첨부 (메모 편집기보다 먼저 받는다)
+      onDragOverCapture={(e) => {
+        if (!hasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
+        if (!dropping) setDropping(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false);
+      }}
+      onDropCapture={(e) => {
+        if (!hasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setDropping(false);
+        void attachFiles(node.id, filesOf(e.dataTransfer));
+      }}
+      // 이미지를 붙여 넣으면(Ctrl+V) 이 Box에 첨부. 글자 붙여 넣기는 그대로.
+      onPasteCapture={(e) => {
+        const images = filesOf(e.clipboardData, true);
+        if (!images.length) return;
+        e.preventDefault();
+        e.stopPropagation();
+        void attachFiles(node.id, images);
+      }}
+    >
       <textarea
         ref={titleRef}
         className="panel-title"
@@ -243,6 +280,7 @@ function PageEditor({ node, query }: { node: BoxNode; query: string }) {
           }
         }}
       />
+      <BoxProps node={node} />
       {(incoming.length > 0 || outgoing.length > 0) && (
         <div className="panel-flow">
           {incoming.length > 0 && (
