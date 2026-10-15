@@ -356,3 +356,40 @@ Box는 id로 가리키지만 보드에 하나뿐인 정확한 제목도 받아 �
 
 자동 연결선(`autoBezier`)은 마주 보는 면끼리일 때 제어점 길이를 면 사이 간격의 절반으로 제한해, 위아래로 먼 Box를 이어도 옆으로 넘어가지 않게 했다.
 Anchor Distribution은 처음 방향이 약 15° 안으로 같으면 반대쪽 끝 위치로 순서를 정한다.
+
+## v0.9 — 탭 끌기 · 첨부 · 태그 · 들어오는 흐름 정렬
+
+### 탭 줄 끌기 (`SidePanel.tsx` — `useDragScroll`)
+- Pointer Events. `pointerdown`에서는 시작점만 기억하고, 6px 넘게 움직이면 끌기로 판정해 그때 pointer capture를 잡는다 (그래야 짧은 클릭은 탭·× 버튼에 그대로 간다).
+- 끄는 동안 `scrollLeft = 시작 scrollLeft − dx` (손가락처럼 정확히 따라옴). React 상태를 바꾸지 않아 다시 그리기가 없다.
+- 끌기가 끝나면 이어지는 `click` 하나를 capture 단계에서 막는다 → 끈 탭은 열리지 않는다. 휠 → 가로 스크롤은 그대로. Undo 대상 아님.
+
+### 데이터 모델 (파일 형식 v3)
+- `BoxNode.tagIds?: string[]`, `BoxNode.attachments?: Attachment[]` (없으면 빈 것으로 본다 → 예전 Box 생성 코드는 그대로).
+- `Doc.tags: Record<id, Tag>` — **Doc 안**에 둬서 Undo 스냅샷에 저절로 들어간다. 필수 필드로 만들어 `{ nodes, edges }`처럼 태그를 빠뜨리는 곳을 컴파일러가 모두 찾게 했다 (`removeNode`, 정렬 결과, 정렬 애니메이션 등).
+- 읽기: v1/v2는 빈 태그·첨부. 같은 normalizedName 태그가 여럿이면 하나로 합치고 Box의 tagIds를 옮긴다. 첨부 경로는 `assets/<이름>`만 허용(폴더 밖 금지).
+
+### 첨부 (`electron/assets.ts`, `src/persistence/attachments.ts`)
+- 저장: 프로젝트 파일 옆 `이름.assets/` 폴더에 `uuid8-원래이름`으로 **복사**(원본 불변, 첨부 하나 = 파일 하나). JSON에는 `relativePath: "assets/…"`와 메타데이터만 — Base64 없음.
+- 넣기: 파일 고르기(main의 대화상자) · 끌어다 놓기(`webUtils.getPathForFile` 경로 → 복사, 경로가 없으면 데이터) · 붙여 넣기(이미지 데이터). 아직 저장 안 된 새 보드면 먼저 저장해 프로젝트 파일을 만든다.
+- 이미지 크기는 파일 머리(PNG IHDR / JPEG SOF / WebP VP8)만 읽어 구한다 (main 스레드에서 그림 전체를 풀지 않는다).
+- 보기: `tfasset://p/<base64url(프로젝트 경로)>/<파일>` 사용자 정의 프로토콜. 허용된 프로젝트의 자료 폴더 안 파일만 내준다. CSP는 `img-src 'self' data: tfasset:`만 넓혔다 (fetch는 여전히 막힘).
+- Board에는 그림을 그리지 않고 개수만. 오른쪽 창의 작은 그림은 `loading="lazy" decoding="async"`.
+- 빼기: Doc에서만 뺀다(Undo로 되살릴 수 있게). 파일 정리는 **프로젝트를 열 때**(그때는 Undo 기록이 없다) 어느 Box도 쓰지 않는 1분 넘은 파일만 지운다. 파일을 온전히 읽지 못했으면 정리하지 않는다.
+- 이름 바꾸기·휴지통·다른 이름으로 저장 때 자료 폴더도 함께 (이름 바꾸기는 폴더를 먼저 옮기고, 파일 이름 바꾸기가 실패하면 되돌린다).
+- 입력 중 붙여 넣기: `editSession.commitChange`가 지금까지의 입력 묶음을 먼저 Undo 한 칸으로 닫고 → 변경을 한 칸으로 → 입력 묶음을 다시 연다 (Undo 순서가 뒤집히지 않게).
+
+### 태그 (`src/model/tags.ts`)
+- `normalizedName = NFC · trim · 공백 하나로 · 소문자`로 같은 태그를 가린다. 보여 주는 이름은 처음 쓴 모양.
+- 저장된 태그 지우기 = `active=false`(보관). Box의 tagIds는 그대로, 추천에서만 빠진다. 같은 이름을 다시 쓰면 그 태그를 되살린다 (id 유지).
+- 자동 완성은 저장된 태그 목록만 훑는다 (Box 전체를 훑지 않음): 앞부분 일치 → 포함, 이미 붙은 태그 제외.
+- Enter는 입력한 이름 그대로(화살표·마우스로 고른 추천이 있을 때만 그 추천) → "Research"를 쳤는데 "Research Notes"가 붙는 일이 없다.
+
+### 정렬 토글 (`src/layout/arrange.ts`)
+- `arrangeDoc(doc, { mode: 'out' | 'in', center })`. **out + 선택 없음은 v0.8과 같은 코드 경로**(결과도 같다).
+- `in`: 중심 = 선택한 Box, 없으면 묶음마다 나가는 Route가 없는 Box 중 거슬러 닿는 Box가 가장 많은 것(같으면 들어오는 Route 수 → id; 위치를 쓰지 않아 다시 눌러도 같은 중심).
+  - 순환 끊기는 중심에서 Route를 **거꾸로** DFS (가까운 = 오른쪽 앞 Box부터) → 중심으로 들어오는 Route는 되돌아감이 되지 않는다.
+  - 열(`anchoredLayers`): 중심의 조상은 "중심까지 가장 긴 길"만큼 앞 열(= 뒤 Box 바로 앞, ALAP). 나머지는 이미 정한 Box에서 가까운 순(BFS)으로 이웃 바로 옆 열에 놓고, 모순이면 뒤쪽을 밀어 모든 Route가 앞 열 → 뒤 열을 지키게 한다.
+  - 순서 훑기·세로 맞춤은 중심 쪽(오른쪽)부터 시작하고, 마지막에 앞 Box를 뒤 Box 높이에 맞춘다 (E → B → C가 한 줄로 이어져 중심으로 모임).
+- `out + 선택`: 선택한 Box부터 DFS(순환을 그 Box에서 끊음), 그 Box의 후손은 "그 Box에서 가장 긴 길"만큼 뒤 열.
+- 토글 상태 `lastSort = { mode, doc }`: 방금 → 로 정렬한 Doc 그대로면 다음은 ←, 아니면(보드를 고쳤거나 되돌렸으면) 다시 →. 무작위 보드 900개에서 다시 정렬해도 그대로임을 확인.

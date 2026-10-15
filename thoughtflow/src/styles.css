@@ -1739,7 +1739,9 @@ svg.layer {
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: min(640px, calc(100% - 220px));
+  /* left: 50%이면 남은 폭이 절반뿐이라 글이 일찍 잘린다 → 내용 폭으로 */
+  width: max-content;
+  max-width: min(780px, calc(100% - 220px));
   padding: 8px 8px 8px 14px;
   background: var(--panel);
   border: 1px solid #3b3552;

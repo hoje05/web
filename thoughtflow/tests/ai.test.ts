@@ -187,3 +187,30 @@ describe('AI layout helpers', () => {
     expect(aiDisplayName(undefined)).toBe('AI');
   });
 });
+
+describe('AI sees tags and attachments', () => {
+  it('read_box lists tags and attachments; get_board marks tags; edits keep them', () => {
+    let doc = ok(addFlow(EMPTY_DOC, { boxes: [{ title: '실험 결과' }] }, '', { x: 0, y: 0 })).doc;
+    const id = Object.keys(doc.nodes)[0];
+    doc = {
+      ...doc,
+      tags: { t: { id: 't', name: 'AI', normalizedName: 'ai', active: true } },
+      nodes: {
+        [id]: {
+          ...doc.nodes[id],
+          tagIds: ['t'],
+          attachments: [{ id: 'x', type: 'file', name: 'results.csv', relativePath: 'assets/1-results.csv', mimeType: 'text/csv', size: 3 }],
+        },
+      },
+    };
+    const text = ok(readBox(doc, id)).text;
+    expect(text).toContain('태그: AI');
+    expect(text).toContain('첨부: results.csv (text/csv)');
+    expect(describeBoard(doc, { projectName: 'p' })).toContain('#AI');
+    const edited = ok(updateBox(doc, { id, append_note: '추가' })).doc;
+    expect(edited.nodes[id].tagIds).toEqual(['t']);
+    expect(edited.nodes[id].attachments).toHaveLength(1);
+    expect(edited.tags).toBe(doc.tags);
+    expect(ok(deleteItems(edited, { box_ids: [id] })).doc.tags).toBe(doc.tags);
+  });
+});

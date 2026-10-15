@@ -42,7 +42,11 @@ function viewportFor(doc: Doc): Viewport | null {
   return { ...fit, panX: fit.panX + TOOLBAR_SPACE };
 }
 
-const firstLine = (text: string) => text.split('\n')[0].trim() || '제목 없음';
+/** 알림에 보여 줄 Box 이름 (첫 줄, 너무 길면 줄임) */
+const firstLine = (text: string) => {
+  const line = text.split('\n')[0].trim() || '제목 없음';
+  return line.length > 18 ? `${line.slice(0, 17)}…` : line;
+};
 
 export function arrangeBoard() {
   if (running) return;

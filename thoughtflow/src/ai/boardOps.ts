@@ -60,7 +60,8 @@ export function describeBoard(doc: Doc, opts: DescribeOptions): string {
       .map((e) => doc.nodes[e.targetNodeId])
       .filter(Boolean)
       .sort(byPosition);
-  const noteMark = (n: BoxNode) => (n.note.trim() && !opts.includeNotes ? ' (메모 있음)' : '');
+  const noteMark = (n: BoxNode) =>
+    `${tagMark(doc, n)}${n.note.trim() && !opts.includeNotes ? ' (메모 있음)' : ''}${n.attachments?.length ? ` (첨부 ${n.attachments.length}개)` : ''}`;
 
   const walk = (n: BoxNode, depth: number) => {
     const indent = '  '.repeat(depth);
@@ -89,6 +90,12 @@ export function describeBoard(doc: Doc, opts: DescribeOptions): string {
   }
   return out.join('\n');
 }
+
+/** " #AI #Project" (태그가 없으면 빈 글자) */
+const tagMark = (doc: Doc, n: BoxNode) => {
+  const names = (n.tagIds ?? []).map((id) => doc.tags?.[id]?.name).filter(Boolean);
+  return names.length ? ` ${names.map((t) => `#${t}`).join(' ')}` : '';
+};
 
 const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max)}… (${s.length - max}자 더 있음 — read_box로 전체 보기)` : s);
 const indentNote = (s: string) =>
@@ -125,6 +132,10 @@ export function readBox(doc: Doc, ref: string): OpResult {
     `제목 전체: ${n.text || '(없음)'}`,
     `들어오는 흐름: ${ins.length ? ins.map((b) => `← ${boxLabel(b)}`).join(', ') : '없음 (흐름의 시작)'}`,
     `나가는 흐름: ${outs.length ? outs.map((b) => `→ ${boxLabel(b)}`).join(', ') : '없음'}`,
+    ...(n.tagIds?.length ? [`태그: ${n.tagIds.map((id) => doc.tags?.[id]?.name).filter(Boolean).join(', ')}`] : []),
+    ...(n.attachments?.length
+      ? [`첨부: ${n.attachments.map((a) => `${a.name} (${a.type === 'image' ? '이미지' : a.mimeType})`).join(', ')} — 내용은 사용자의 PC에만 있습니다`]
+      : []),
     '메모:',
     n.note.trim() ? indentNote(n.note) : '  (없음)',
   ];
