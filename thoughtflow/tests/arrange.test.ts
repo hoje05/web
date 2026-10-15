@@ -15,6 +15,7 @@ const route = (id: string, from: string, to: string): RouteEdge => ({
   pathMode: 'auto',
 });
 const make = (nodes: BoxNode[], edges: [string, string][]): Doc => ({
+  tags: {},
   nodes: Object.fromEntries(nodes.map((n) => [n.id, n])),
   edges: Object.fromEntries(edges.map(([a, b], i) => [`e${i}`, route(`e${i}`, a, b)])),
 });
@@ -136,7 +137,7 @@ describe('정렬 (arrangeDoc)', () => {
   });
 
   it('빈 보드는 그대로', () => {
-    const doc: Doc = { nodes: {}, edges: {} };
+    const doc: Doc = { nodes: {}, edges: {}, tags: {} };
     expect(arrangeDoc(doc)).toBe(doc);
   });
 

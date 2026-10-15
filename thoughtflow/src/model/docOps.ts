@@ -2,7 +2,7 @@
  * Doc에 대한 순수 함수 연산. 항상 새 객체를 반환하고 입력을 변경하지 않는다.
  * (Undo/Redo는 Doc snapshot을 그대로 보관하는 방식이므로 불변성이 중요하다)
  */
-import { DEFAULT_BOX_HEIGHT, DEFAULT_BOX_WIDTH, type BoxNode, type Doc, type RouteEdge } from './types';
+import { DEFAULT_BOX_HEIGHT, DEFAULT_BOX_WIDTH, type Attachment, type BoxNode, type Doc, type RouteEdge } from './types';
 
 export function addNode(doc: Doc, node: BoxNode): Doc {
   return { ...doc, nodes: { ...doc.nodes, [node.id]: node } };
@@ -63,7 +63,7 @@ export function removeNode(doc: Doc, id: string): Doc {
   const edges = Object.fromEntries(
     Object.entries(doc.edges).filter(([, e]) => e.sourceNodeId !== id && e.targetNodeId !== id),
   );
-  return { nodes, edges };
+  return { ...doc, nodes, edges };
 }
 
 export function removeEdge(doc: Doc, id: string): Doc {
@@ -81,4 +81,19 @@ export function updateEdge(doc: Doc, id: string, patch: Partial<Omit<RouteEdge, 
   const edge = doc.edges[id];
   if (!edge) return doc;
   return { ...doc, edges: { ...doc.edges, [id]: { ...edge, ...patch } } };
+}
+
+/** Box에 첨부 추가 (뒤에 붙인다) */
+export function addAttachments(doc: Doc, id: string, attachments: Attachment[]): Doc {
+  const node = doc.nodes[id];
+  if (!node || !attachments.length) return doc;
+  return updateNode(doc, id, { attachments: [...(node.attachments ?? []), ...attachments] });
+}
+
+/** Box에서 첨부 하나를 뺀다 (파일은 Undo로 되살릴 수 있도록 바로 지우지 않는다) */
+export function removeAttachment(doc: Doc, id: string, attachmentId: string): Doc {
+  const node = doc.nodes[id];
+  const list = node?.attachments ?? [];
+  if (!node || !list.some((a) => a.id === attachmentId)) return doc;
+  return updateNode(doc, id, { attachments: list.filter((a) => a.id !== attachmentId) });
 }

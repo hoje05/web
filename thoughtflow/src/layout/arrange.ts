@@ -192,7 +192,7 @@ function arrangeOnce(doc: Doc): Doc {
   const stateOf = () => JSON.stringify(laneIds.map((id) => planned[id].pathPoints));
   const seen: string[] = [stateOf()];
   for (let round = 0; round < 8 && laneIds.length; round++) {
-    const anchors = computeAnchors({ nodes: nextNodes, edges: planned });
+    const anchors = computeAnchors({ ...doc, nodes: nextNodes, edges: planned });
     for (const id of laneIds) {
       const a = anchors.get(id);
       const chord = a ? laneChord(planned[id], a.source, a.target) : [];
@@ -223,7 +223,7 @@ function arrangeOnce(doc: Doc): Doc {
       nextEdges[e.id] = p;
     }
   }
-  return changed ? { nodes: nextNodes, edges: nextEdges } : doc;
+  return changed ? { ...doc, nodes: nextNodes, edges: nextEdges } : doc;
 }
 
 const round5 = (v: number) => Math.round(v * 1e5) / 1e5;

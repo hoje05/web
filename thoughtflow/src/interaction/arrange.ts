@@ -65,7 +65,7 @@ export function arrangeBoard() {
     for (const [id, n] of Object.entries(target.nodes)) if (nodes[id]) nodes[id] = { ...nodes[id], x: n.x, y: n.y };
     const edges = { ...now.doc.edges };
     for (const [id, e] of Object.entries(target.edges)) if (edges[id]) edges[id] = e;
-    now.setDocLive({ nodes, edges });
+    now.setDocLive({ ...now.doc, nodes, edges });
     now.commitFrom(before);
     if (v1) now.setViewport(v1);
     const routes = Object.keys(target.edges).length;
@@ -92,7 +92,7 @@ export function arrangeBoard() {
       const from = before.nodes[id];
       if (nodes[id] && from) nodes[id] = { ...nodes[id], x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k };
     }
-    cur.setDocLive({ nodes, edges: target.edges });
+    cur.setDocLive({ ...cur.doc, nodes, edges: target.edges });
     if (v1) {
       cur.setViewport({
         zoom: v0.zoom + (v1.zoom - v0.zoom) * k,

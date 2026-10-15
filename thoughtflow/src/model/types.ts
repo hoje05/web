@@ -18,6 +18,41 @@ export interface BoxNode {
   note: string;
   /** AI가 만든 Box면 그 AI 이름 (Claude, ChatGPT …). 사람이 만든 Box는 없음. */
   origin?: string;
+  /** 붙인 태그 (Doc.tags의 id). 없으면 태그 없음. */
+  tagIds?: string[];
+  /** 첨부한 이미지·파일 (내용은 프로젝트의 자료 폴더에, 여기에는 위치와 정보만). 없으면 첨부 없음. */
+  attachments?: Attachment[];
+}
+
+/**
+ * Box에 첨부한 이미지·파일.
+ * 실제 파일은 프로젝트 파일 옆의 자료 폴더(“프로젝트 이름.assets”)에 겹치지 않는 이름으로 복사해 둔다.
+ * relativePath = "assets/<고유 이름>" → 자료 폴더 안의 그 파일. 첨부 하나는 한 Box만 쓴다 (다른 Box와 나눠 쓰지 않음).
+ */
+export interface Attachment {
+  id: string;
+  /** image = PNG/JPG/WebP (창 안에서 미리보기), file = 그 밖의 모든 파일 */
+  type: 'image' | 'file';
+  /** 원래 파일 이름 (보여 주는 이름) */
+  name: string;
+  relativePath: string;
+  mimeType: string;
+  /** 바이트 */
+  size: number;
+  width?: number;
+  height?: number;
+}
+
+/**
+ * 프로젝트에 저장해 두는 태그 (다시 쓰기·자동 완성용).
+ * 이름은 처음 쓴 모양 그대로 보여 주고, 같은 태그인지는 normalizedName(앞뒤 공백 제거·소문자)으로 가린다.
+ * 지운 태그는 active=false로만 바꾼다 → 이미 붙어 있는 Box에는 그대로 남고, 추천 목록에서만 빠진다.
+ */
+export interface Tag {
+  id: string;
+  name: string;
+  normalizedName: string;
+  active: boolean;
 }
 
 export interface Anchor {
@@ -56,6 +91,8 @@ export interface RouteEdge {
 export interface Doc {
   nodes: Record<string, BoxNode>;
   edges: Record<string, RouteEdge>;
+  /** 저장된 태그 (만든 순서). Undo 기록에 함께 들어가도록 Doc에 둔다. */
+  tags: Record<string, Tag>;
 }
 
 /** screen = world * zoom + pan */
@@ -69,7 +106,7 @@ export type Selection = { kind: 'node'; id: string } | { kind: 'edge'; id: strin
 
 export type Tool = 'select' | 'route';
 
-export const EMPTY_DOC: Doc = { nodes: {}, edges: {} };
+export const EMPTY_DOC: Doc = { nodes: {}, edges: {}, tags: {} };
 
 export const DEFAULT_BOX_WIDTH = 180;
 export const DEFAULT_BOX_HEIGHT = 64;

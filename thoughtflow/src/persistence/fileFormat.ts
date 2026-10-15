@@ -2,9 +2,13 @@
  * Project 파일 형식 (.tflow, JSON).
  *
  * {
- *   "format": "thoughtflow", "version": 1,
+ *   "format": "thoughtflow", "version": 3,
  *   "board": { "zoom", "panX", "panY" },
- *   "nodes": [{ "id", "x", "y", "width", "height", "text", "note", "origin"? }],   // note = 오른쪽 창의 메모 (v2), origin = 만든 AI (선택)
+ *   "tags": [{ "id", "name", "normalizedName", "active" }],   // 저장된 태그 (v3). active=false = 지운 태그(붙어 있던 Box에는 남음)
+ *   "nodes": [{ "id", "x", "y", "width", "height", "text", "note", "origin"?,   // note = 오른쪽 창의 메모 (v2), origin = 만든 AI (선택)
+ *               "tagIds": [...],                                              // 붙인 태그 (v3)
+ *               "attachments": [{ "id", "type": "image" | "file", "name", "relativePath": "assets/…",
+ *                                 "mimeType", "size", "width"?, "height"? }] }],   // 첨부 (v3). 파일은 "프로젝트 이름.assets" 폴더에
  *   "edges": [{ "id", "sourceNodeId", "targetNodeId",
  *               "sourceAnchor": { "side" }, "targetAnchor": { "side" },
  *               "pathPoints": [[u, v], ...],   // Chord 좌표 (source → target 순서)
@@ -17,19 +21,25 @@
 import {
   DEFAULT_BOX_HEIGHT,
   DEFAULT_BOX_WIDTH,
+  type Attachment,
   type BoxNode,
   type ChordPoint,
   type Doc,
   type PathMode,
   type RouteEdge,
   type Side,
+  type Tag,
   type Viewport,
 } from '../model/types';
+import { normalizeTagName } from '../model/tags';
 import { MAX_ZOOM, MIN_ZOOM } from '../viewport/viewport';
 
 export const FILE_FORMAT = 'thoughtflow';
-/** v1: 초기 형식, v2: Box note 추가 (v1 파일도 읽을 수 있다) */
-export const FILE_VERSION = 2;
+/**
+ * v1: 초기 형식, v2: Box note 추가, v3: 태그(tags, tagIds)와 첨부(attachments) 추가.
+ * 예전 파일도 그대로 읽는다 (없는 칸은 빈 값으로).
+ */
+export const FILE_VERSION = 3;
 export const FILE_EXTENSION = 'tflow';
 
 const SIDES: Side[] = ['top', 'right', 'bottom', 'left'];
@@ -53,6 +63,7 @@ export function serializeBoard(doc: Doc, viewport: Viewport, ui?: BoardUiState):
     version: FILE_VERSION,
     savedAt: new Date().toISOString(),
     board: { zoom: round(viewport.zoom, 4), panX: round(viewport.panX, 1), panY: round(viewport.panY, 1) },
+    tags: Object.values(doc.tags ?? {}).map((t) => ({ id: t.id, name: t.name, normalizedName: t.normalizedName, active: t.active })),
     nodes: Object.values(doc.nodes).map((n) => ({
       id: n.id,
       x: round(n.x, 1),
@@ -62,6 +73,16 @@ export function serializeBoard(doc: Doc, viewport: Viewport, ui?: BoardUiState):
       text: n.text,
       note: n.note,
       ...(n.origin ? { origin: n.origin } : {}),
+      tagIds: (n.tagIds ?? []).filter((id) => doc.tags?.[id]),
+      attachments: (n.attachments ?? []).map((a) => ({
+        id: a.id,
+        type: a.type,
+        name: a.name,
+        relativePath: a.relativePath,
+        mimeType: a.mimeType,
+        size: a.size,
+        ...(a.width && a.height ? { width: a.width, height: a.height } : {}),
+      })),
     })),
     edges: Object.values(doc.edges).map((e) => ({
       id: e.id,
@@ -102,6 +123,27 @@ export function parseBoard(text: string): {
   if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) throw new FileFormatError('보드 데이터가 손상되었습니다.');
 
   const warnings: string[] = [];
+
+  // ── 태그 (v3). 이름이 같은(대소문자·앞뒤 공백 무시) 태그가 여럿이면 하나로 합친다.
+  const tags: Record<string, Tag> = {};
+  const tagAlias = new Map<string, string>();
+  const byName = new Map<string, string>();
+  for (const raw of Array.isArray(data.tags) ? data.tags : []) {
+    if (!isObj(raw) || typeof raw.id !== 'string' || !raw.id || typeof raw.name !== 'string' || tagAlias.has(raw.id)) continue;
+    const name = raw.name.trim().slice(0, 60);
+    const normalizedName = normalizeTagName(name);
+    if (!normalizedName) continue;
+    const same = byName.get(normalizedName);
+    if (same) {
+      tagAlias.set(raw.id, same);
+      if (raw.active !== false) tags[same] = { ...tags[same], active: true };
+      continue;
+    }
+    byName.set(normalizedName, raw.id);
+    tagAlias.set(raw.id, raw.id);
+    tags[raw.id] = { id: raw.id, name, normalizedName, active: raw.active !== false };
+  }
+
   const nodes: Record<string, BoxNode> = {};
   for (const raw of data.nodes) {
     if (!isObj(raw) || typeof raw.id !== 'string' || !isNum(raw.x) || !isNum(raw.y) || nodes[raw.id]) {
@@ -118,6 +160,13 @@ export function parseBoard(text: string): {
       note: typeof raw.note === 'string' ? raw.note : '',
       ...(typeof raw.origin === 'string' && raw.origin ? { origin: raw.origin.slice(0, 40) } : {}),
     };
+    const tagIds = Array.isArray(raw.tagIds)
+      ? [...new Set(raw.tagIds.map((id) => (typeof id === 'string' ? tagAlias.get(id) : undefined)).filter((id): id is string => !!id))]
+      : [];
+    if (tagIds.length) nodes[raw.id].tagIds = tagIds;
+    const attachments = Array.isArray(raw.attachments) ? raw.attachments.map(parseAttachment).filter((a): a is Attachment => !!a) : [];
+    if (Array.isArray(raw.attachments) && attachments.length < raw.attachments.length) warnings.push('잘못된 첨부 정보를 건너뛰었습니다.');
+    if (attachments.length) nodes[raw.id].attachments = [...new Map(attachments.map((a) => [a.id, a])).values()];
   }
 
   const edges: Record<string, RouteEdge> = {};
@@ -166,5 +215,32 @@ export function parseBoard(text: string): {
     const activeTab = typeof data.ui.activeTab === 'string' && tabs.includes(data.ui.activeTab) ? data.ui.activeTab : (tabs[0] ?? null);
     ui = { tabs, activeTab, panelOpen: data.ui.panelOpen === true && tabs.length > 0 };
   }
-  return { doc: { nodes, edges }, viewport, ui, warnings };
+  return { doc: { nodes, edges, tags }, viewport, ui, warnings };
+}
+
+const ATTACHMENT_PATH = /^assets\/[^/\\]+$/;
+
+/** 첨부 정보 하나를 검사하며 읽는다. 자료 폴더 밖을 가리키는 경로 등 이상하면 null. */
+function parseAttachment(raw: unknown): Attachment | null {
+  if (!isObj(raw) || typeof raw.id !== 'string' || !raw.id || typeof raw.relativePath !== 'string') return null;
+  const rel = raw.relativePath;
+  if (!ATTACHMENT_PATH.test(rel) || rel.endsWith('/..') || rel === 'assets/.' || rel === 'assets/..') return null;
+  const name = typeof raw.name === 'string' && raw.name ? raw.name.slice(0, 255) : rel.slice('assets/'.length);
+  const mimeType = typeof raw.mimeType === 'string' && raw.mimeType ? raw.mimeType.slice(0, 100) : 'application/octet-stream';
+  return {
+    id: raw.id,
+    type: raw.type === 'image' ? 'image' : 'file',
+    name,
+    relativePath: rel,
+    mimeType,
+    size: isNum(raw.size) && raw.size >= 0 ? raw.size : 0,
+    ...(isNum(raw.width) && isNum(raw.height) && raw.width > 0 && raw.height > 0 ? { width: raw.width, height: raw.height } : {}),
+  };
+}
+
+/** Doc 안의 모든 첨부 파일 경로 (자료 폴더 정리용) */
+export function attachmentPaths(doc: Doc): string[] {
+  const out = new Set<string>();
+  for (const n of Object.values(doc.nodes)) for (const a of n.attachments ?? []) out.add(a.relativePath);
+  return [...out];
 }

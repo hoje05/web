@@ -65,7 +65,7 @@ try {
       box('h', 900, 640, '숙소는 나중에'),
     ];
     const edges = [route('r1', 'a', 'b'), route('r2', 'b', 'c'), route('r3', 'c', 'd'), route('r4', 'c', 'e'), route('r5', 'e', 'f'), route('r6', 'd', 'f'), route('r7', 'f', 'a'), route('r8', 'a', 'f')];
-    s.commit({ nodes: Object.fromEntries(nodes.map((n) => [n.id, n])), edges: Object.fromEntries(edges.map((e) => [e.id, e])) });
+    s.commit({ ...s.doc, nodes: Object.fromEntries(nodes.map((n) => [n.id, n])), edges: Object.fromEntries(edges.map((e) => [e.id, e])) });
     s.fitView();
   });
   await win.waitForTimeout(400); // Box 크기 측정

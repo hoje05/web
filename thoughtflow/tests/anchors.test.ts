@@ -15,6 +15,7 @@ const edge = (id: string, s: string, t: string, ss: Side, ts: Side): RouteEdge =
   pathMode: 'straight',
 });
 const docOf = (nodes: BoxNode[], edges: RouteEdge[]): Doc => ({
+  tags: {},
   nodes: Object.fromEntries(nodes.map((n) => [n.id, n])),
   edges: Object.fromEntries(edges.map((e) => [e.id, e])),
 });
