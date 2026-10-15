@@ -64,6 +64,10 @@ export interface AppState extends History {
   aiSettingsOpen: boolean;
   setAiSettingsOpen: (open: boolean) => void;
 
+  // ── 정렬 버튼: 누를 때마다 → 나가는 흐름 / ← 들어오는 흐름 중심 ──
+  /** 마지막 정렬 (방식 + 정렬한 결과 Doc). 그 뒤로 보드가 바뀌었으면 다음 정렬은 다시 → 부터. */
+  lastSort: { mode: 'out' | 'in'; doc: Doc } | null;
+
   // ── 첨부 미리보기 · 태그 관리 창 ──
   preview: { nodeId: string; attachmentId: string } | null;
   setPreview: (preview: AppState['preview']) => void;
@@ -171,6 +175,7 @@ export const useStore = create<AppState>()((set, get) => ({
   aiSettingsOpen: false,
   setAiSettingsOpen: (aiSettingsOpen) => set({ aiSettingsOpen }),
   setDrawer: (drawerOpen) => set({ drawerOpen }),
+  lastSort: null,
   preview: null,
   setPreview: (preview) => set({ preview }),
   tagManagerOpen: false,
@@ -228,6 +233,7 @@ export const useStore = create<AppState>()((set, get) => ({
       aiFlash: [],
       preview: null,
       tagManagerOpen: false,
+      lastSort: null,
     });
     get().closePanel();
     set({ tabs: [], activeTab: null, panelDismissed: false });
@@ -238,6 +244,7 @@ export const useStore = create<AppState>()((set, get) => ({
       aiFlash: [],
       preview: null,
       tagManagerOpen: false,
+      lastSort: null,
       doc,
       savedDoc: doc,
       filePath,
@@ -457,6 +464,14 @@ export const useStore = create<AppState>()((set, get) => ({
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setSaveState: (saveState) => set({ saveState }),
 }));
+
+/**
+ * 정렬 버튼을 누르면 할 방식.
+ * 처음(또는 정렬한 뒤 보드가 바뀌었으면) → 나가는 흐름, 방금 → 로 정렬한 그대로면 ← 들어오는 흐름, 그다음은 다시 → …
+ */
+export function nextSortMode(s: Pick<AppState, 'lastSort' | 'doc'>): 'out' | 'in' {
+  return s.lastSort && s.lastSort.doc === s.doc && s.lastSort.mode === 'out' ? 'in' : 'out';
+}
 
 /** 검색어가 Box의 제목이나 메모에 들어 있는지 (대소문자 무시) */
 export function nodeMatches(node: { text: string; note: string }, query: string): boolean {

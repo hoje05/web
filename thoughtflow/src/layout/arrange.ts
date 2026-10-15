@@ -11,6 +11,14 @@
  *  7. Route가 없는 Box는 맨 아래에 줄지어 놓는다. 전체는 원래 내용의 왼쪽 위에서 시작한다.
  *
  * 순수 함수다. 이미 정렬된 보드를 다시 정렬하면 그대로다 (바뀐 것이 없으면 같은 Doc을 돌려준다).
+ *
+ * 두 가지 방식 (정렬 버튼을 누를 때마다 번갈아):
+ *  - out (나가는 흐름, 기본): 시작 Box에서 앞으로. Box는 "앞 Box 바로 다음 열"에 (가장 이른 열).
+ *    선택한 Box가 있으면 그 Box에서 나가는 흐름을 기준으로 (그 Box부터 열을 센다).
+ *  - in (들어오는 흐름 중심): 중심 Box에서 Route를 거꾸로 따라가며, 중심으로 모여드는 모양으로.
+ *    Box는 "뒤 Box 바로 앞 열"에 (가장 늦은 열) → 중심으로 들어오는 갈래들이 중심 바로 앞에서 모인다.
+ *    중심 = 선택한 Box, 없으면 묶음마다 흐름의 끝 Box(나가는 Route가 없는 Box) 중 가장 많은 흐름이 모이는 Box.
+ * 어느 방식이든 Box 위치와 Route 모양만 바꾼다 (Route의 방향·연결, 글, 태그, 첨부는 그대로). 순환이 있어도 안전하다.
  */
 import { computeAnchors } from '../anchors/distribution';
 import { fromChord, toChord } from '../geometry/chord';
@@ -59,18 +67,27 @@ interface GroupLayout {
 
 const byPosition = (a: BoxNode, b: BoxNode) => a.y - b.y || a.x - b.x || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
-export function arrangeDoc(doc: Doc): Doc {
+/** out = 나가는 흐름 순서대로 (기존 정렬), in = 들어오는 흐름 중심 */
+export type ArrangeMode = 'out' | 'in';
+
+export interface ArrangeOptions {
+  mode?: ArrangeMode;
+  /** 중심 Box (선택한 Box). 그 Box가 있는 묶음만 이 Box를 기준으로 한다. */
+  center?: string | null;
+}
+
+export function arrangeDoc(doc: Doc, opts: ArrangeOptions = {}): Doc {
   // 정렬한 모양을 기준으로 다시 정렬해도 같아질 때까지 (몇 번이면 멈춘다) → 정렬 버튼을 다시 눌러도 흔들리지 않는다
   let prev = doc;
-  let next = arrangeOnce(doc);
+  let next = arrangeOnce(doc, opts);
   for (let i = 0; i < 6 && next !== prev; i++) {
     prev = next;
-    next = arrangeOnce(prev);
+    next = arrangeOnce(prev, opts);
   }
   return next;
 }
 
-function arrangeOnce(doc: Doc): Doc {
+function arrangeOnce(doc: Doc, opts: ArrangeOptions): Doc {
   const nodes = Object.values(doc.nodes);
   if (!nodes.length) return doc;
   const edges = Object.values(doc.edges).filter(
@@ -122,6 +139,8 @@ function arrangeOnce(doc: Doc): Doc {
       g,
       edges.filter((e) => ids.has(e.sourceNodeId)),
       nowAnchors,
+      opts.mode ?? 'out',
+      opts.center && ids.has(opts.center) ? opts.center : null,
     );
     for (const [id, p] of res.pos) pos.set(id, { x: p.x, y: p.y + cursor });
     for (const [id, pts] of res.lanes) lanes.set(id, pts.map((p) => ({ x: p.x, y: p.y + cursor })));
@@ -228,7 +247,13 @@ function arrangeOnce(doc: Doc): Doc {
 
 const round5 = (v: number) => Math.round(v * 1e5) / 1e5;
 
-function layoutGroup(group: BoxNode[], gEdges: RouteEdge[], nowAnchors: Map<string, { source: Vec; target: Vec }>): GroupLayout {
+function layoutGroup(
+  group: BoxNode[],
+  gEdges: RouteEdge[],
+  nowAnchors: Map<string, { source: Vec; target: Vec }>,
+  mode: ArrangeMode,
+  center: string | null,
+): GroupLayout {
   const byId = new Map(group.map((n) => [n.id, n]));
   const outgoing = new Map<string, RouteEdge[]>(group.map((n) => [n.id, []]));
   const indeg = new Map<string, number>(group.map((n) => [n.id, 0]));
@@ -240,23 +265,35 @@ function layoutGroup(group: BoxNode[], gEdges: RouteEdge[], nowAnchors: Map<stri
   for (const list of outgoing.values()) list.sort((a, b) => before(byId.get(a.targetNodeId)!, byId.get(b.targetNodeId)!));
 
   // ── 2) 순환 끊기: 원래 왼쪽에 있던 시작 Box부터 깊이 우선으로 훑고, 지금 지나는 길 위의 Box로 돌아가는 Route를 "되돌아감"으로
+  //    (들어오는 흐름 방식은 중심 Box에서 Route를 거꾸로 훑는다 → 중심으로 들어오는 Route는 되돌아감이 되지 않는다)
   const back = new Set<string>();
   const state = new Map<string, 1 | 2>();
-  const starts = [...group].sort((a, b) => Number(indeg.get(a.id)! > 0) - Number(indeg.get(b.id)! > 0) || before(a, b));
+  const incoming = new Map<string, RouteEdge[]>(group.map((n) => [n.id, []]));
+  for (const e of gEdges) incoming.get(e.targetNodeId)!.push(e);
+  // 거꾸로 훑을 때는 나가는 흐름의 거울: 가장 오른쪽(가까운) 앞 Box부터
+  for (const list of incoming.values()) list.sort((a, b) => before(byId.get(b.sourceNodeId)!, byId.get(a.sourceNodeId)!));
+  const focus = mode === 'in' ? (center ?? primarySink(group, gEdges, outgoing)) : center;
+  let starts: BoxNode[];
+  if (mode === 'out') starts = [...group].sort((a, b) => Number(indeg.get(a.id)! > 0) - Number(indeg.get(b.id)! > 0) || before(a, b));
+  else starts = [...group].sort((a, b) => Number(outgoing.get(a.id)!.length > 0) - Number(outgoing.get(b.id)!.length > 0) || before(b, a));
+  if (focus) starts = [byId.get(focus)!, ...starts.filter((n) => n.id !== focus)];
+  // out: Route 방향대로 (다음 Box = target), in: 거꾸로 (다음 Box = source)
+  const walk = mode === 'out' ? outgoing : incoming;
+  const nextOf = (e: RouteEdge) => (mode === 'out' ? e.targetNodeId : e.sourceNodeId);
   for (const s of starts) {
     if (state.has(s.id)) continue;
     state.set(s.id, 1);
     const stack: { id: string; i: number }[] = [{ id: s.id, i: 0 }];
     while (stack.length) {
       const top = stack[stack.length - 1];
-      const list = outgoing.get(top.id)!;
+      const list = walk.get(top.id)!;
       if (top.i < list.length) {
         const e = list[top.i++];
-        const st = state.get(e.targetNodeId);
+        const st = state.get(nextOf(e));
         if (st === 1) back.add(e.id);
         else if (st === undefined) {
-          state.set(e.targetNodeId, 1);
-          stack.push({ id: e.targetNodeId, i: 0 });
+          state.set(nextOf(e), 1);
+          stack.push({ id: nextOf(e), i: 0 });
         }
       } else {
         state.set(top.id, 2);
@@ -286,11 +323,14 @@ function layoutGroup(group: BoxNode[], gEdges: RouteEdge[], nowAnchors: Map<stri
       if (remaining.get(t) === 0) ready.push(t);
     }
   }
-  const layer = new Map<string, number>();
-  for (const id of order) layer.set(id, Math.max(0, ...ins.get(id)!.map((p) => layer.get(p)! + 1)));
-  // 시작 Box는 뒤 Box 바로 앞 열로 당긴다 (긴 Route 줄이기)
-  for (const id of [...order].reverse()) {
-    if (ins.get(id)!.length === 0 && outs.get(id)!.length) layer.set(id, Math.min(...outs.get(id)!.map((t) => layer.get(t)!)) - 1);
+  let layer = new Map<string, number>();
+  if (focus) layer = anchoredLayers(order, ins, outs, focus, mode);
+  else {
+    for (const id of order) layer.set(id, Math.max(0, ...ins.get(id)!.map((p) => layer.get(p)! + 1)));
+    // 시작 Box는 뒤 Box 바로 앞 열로 당긴다 (긴 Route 줄이기)
+    for (const id of [...order].reverse()) {
+      if (ins.get(id)!.length === 0 && outs.get(id)!.length) layer.set(id, Math.min(...outs.get(id)!.map((t) => layer.get(t)!)) - 1);
+    }
   }
   const minLayer = Math.min(...layer.values());
   for (const [id, l] of layer) layer.set(id, l - minLayer);
@@ -361,7 +401,8 @@ function layoutGroup(group: BoxNode[], gEdges: RouteEdge[], nowAnchors: Map<stri
   let best = snapshot();
   let bestCross = crossings(layers);
   for (let it = 0; it < ORDER_SWEEPS && bestCross > 0; it++) {
-    const down = it % 2 === 0;
+    // 들어오는 흐름 방식은 중심(오른쪽)에서 거슬러 올라가는 쪽부터
+    const down = mode === 'in' ? it % 2 === 1 : it % 2 === 0;
     for (let k = 1; k <= maxLayer; k++) {
       const l = down ? k : maxLayer - k;
       const bc = new Map<V, number>();
@@ -408,10 +449,18 @@ function layoutGroup(group: BoxNode[], gEdges: RouteEdge[], nowAnchors: Map<stri
     placeInOrder(l, want);
   };
   for (let r = 0; r < ALIGN_ROUNDS; r++) {
-    for (let k = 1; k <= maxLayer; k++) place(layers[k], (v) => v.preds);
-    for (let k = maxLayer - 1; k >= 0; k--) place(layers[k], (v) => v.succs);
+    if (mode === 'in') {
+      // 들어오는 흐름: 앞 Box들을 뒤 Box 쪽으로 먼저 모은다
+      for (let k = maxLayer - 1; k >= 0; k--) place(layers[k], (v) => v.succs);
+      for (let k = 1; k <= maxLayer; k++) place(layers[k], (v) => v.preds);
+    } else {
+      for (let k = 1; k <= maxLayer; k++) place(layers[k], (v) => v.preds);
+      for (let k = maxLayer - 1; k >= 0; k--) place(layers[k], (v) => v.succs);
+    }
   }
   for (const l of layers) place(l, (v) => [...v.preds, ...v.succs]);
+  // 들어오는 흐름: 마지막으로 앞 Box들을 뒤 Box 높이에 맞춘다 (E → B → C가 한 줄로 이어져 중심으로 모이게)
+  if (mode === 'in') for (let k = maxLayer - 1; k >= 0; k--) place(layers[k], (v) => v.succs);
 
   // ── 결과 (묶음의 왼쪽 위 = 0, 0)
   let minTop = Infinity;
@@ -490,4 +539,102 @@ function crossings(layers: V[][]): number {
     }
   }
   return total;
+}
+
+/**
+ * 들어오는 흐름 방식에서 묶음의 중심: 나가는 Route가 없는 Box(흐름의 끝) 중 거슬러 올라가 닿는 Box가 가장 많은 Box.
+ * 흐름의 끝이 없으면(모두 순환) 모든 Box 중에서. 같으면 들어오는 Route가 많은 Box → 나중에 만든 Box(id).
+ * (위치로 고르지 않는다 → 정렬한 뒤 다시 눌러도 같은 Box가 중심)
+ */
+function primarySink(group: BoxNode[], gEdges: RouteEdge[], outgoing: Map<string, RouteEdge[]>): string {
+  const preds = new Map<string, string[]>(group.map((n) => [n.id, []]));
+  for (const e of gEdges) preds.get(e.targetNodeId)!.push(e.sourceNodeId);
+  const sinks = group.filter((n) => outgoing.get(n.id)!.length === 0);
+  const candidates = sinks.length ? sinks : group;
+  const reach = (id: string) => {
+    const seen = new Set([id]);
+    const stack = [id];
+    while (stack.length) for (const p of preds.get(stack.pop()!)!) if (!seen.has(p)) seen.add(p), stack.push(p);
+    return seen.size;
+  };
+  if (candidates.length === 1) return candidates[0].id;
+  const score = new Map(candidates.map((n) => [n.id, [reach(n.id), preds.get(n.id)!.length] as const]));
+  const better = (a: string, b: string) => {
+    const [ra, da] = score.get(a)!;
+    const [rb, db] = score.get(b)!;
+    return ra !== rb ? ra > rb : da !== db ? da > db : a > b;
+  };
+  return candidates.map((n) => n.id).reduce((best, id) => (better(id, best) ? id : best));
+}
+
+/**
+ * 중심 Box를 기준으로 열을 정한다.
+ *  - in: 중심으로 들어오는 Box들 = 중심까지 가장 긴 길만큼 앞 열 (모여드는 모양)
+ *  - out: 중심에서 나가는 Box들 = 중심에서 가장 긴 길만큼 뒤 열
+ * 나머지 Box는 이미 정한 Box에서 가까운 것부터, 이웃한 Box 바로 옆 열에 (in이면 뒤 Box 쪽, out이면 앞 Box 쪽을 먼저).
+ * 모든 Route는 앞 열 → 뒤 열을 지킨다 (모자라면 그 뒤를 밀어낸다). 순환은 이미 끊겨 있다 (order = 위상 순서).
+ */
+function anchoredLayers(
+  order: string[],
+  ins: Map<string, string[]>,
+  outs: Map<string, string[]>,
+  focus: string,
+  mode: ArrangeMode,
+): Map<string, number> {
+  const layer = new Map<string, number>([[focus, 0]]);
+  if (mode === 'in') {
+    for (const id of [...order].reverse()) {
+      if (id === focus) continue;
+      let best = Infinity;
+      for (const t of outs.get(id)!) if (layer.has(t)) best = Math.min(best, layer.get(t)! - 1);
+      if (best < Infinity) layer.set(id, best);
+    }
+  } else {
+    for (const id of order) {
+      if (id === focus) continue;
+      let best = -Infinity;
+      for (const p of ins.get(id)!) if (layer.has(p)) best = Math.max(best, layer.get(p)! + 1);
+      if (best > -Infinity) layer.set(id, best);
+    }
+  }
+  const push = (start: string, dir: 1 | -1) => {
+    const stack = [start];
+    while (stack.length) {
+      const x = stack.pop()!;
+      for (const y of (dir === 1 ? outs : ins).get(x)!) {
+        if (!layer.has(y)) continue;
+        const need = layer.get(x)! + dir;
+        if (dir === 1 ? layer.get(y)! < need : layer.get(y)! > need) {
+          layer.set(y, need);
+          stack.push(y);
+        }
+      }
+    }
+  };
+  const queue = order.filter((id) => layer.has(id));
+  const queued = new Set(queue);
+  for (let i = 0; i < queue.length; i++) {
+    const id = queue[i];
+    if (!layer.has(id)) {
+      let lo = -Infinity;
+      let hi = Infinity;
+      for (const p of ins.get(id)!) if (layer.has(p)) lo = Math.max(lo, layer.get(p)! + 1);
+      for (const t of outs.get(id)!) if (layer.has(t)) hi = Math.min(hi, layer.get(t)! - 1);
+      if (lo <= hi) layer.set(id, mode === 'in' ? (hi < Infinity ? hi : lo) : lo > -Infinity ? lo : hi);
+      else if (mode === 'in') {
+        layer.set(id, lo);
+        push(id, 1);
+      } else {
+        layer.set(id, hi);
+        push(id, -1);
+      }
+    }
+    for (const nb of [...outs.get(id)!, ...ins.get(id)!]) {
+      if (!queued.has(nb)) {
+        queued.add(nb);
+        queue.push(nb);
+      }
+    }
+  }
+  return layer;
 }

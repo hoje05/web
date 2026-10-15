@@ -94,7 +94,7 @@ function buildMenu() {
         item('100%', 'zoomReset', 'CmdOrCtrl+0'),
         item('전체 보기', 'zoomFit', 'Shift+1'),
         { type: 'separator' },
-        item('정렬 (Box·Route를 흐름 순서대로)', 'arrange'),
+        item('정렬 (누를 때마다 → 나가는 흐름 / ← 들어오는 흐름 중심)', 'arrange'),
         ...(app.isPackaged
           ? []
           : ([{ type: 'separator' }, { label: '개발자 도구', role: 'toggleDevTools' }] as MenuItemConstructorOptions[])),

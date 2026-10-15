@@ -124,23 +124,47 @@ try {
   await win.keyboard.press('Control+y');
   assert(JSON.stringify(positions(await doc())) === JSON.stringify(positions(after)), 'Ctrl+Y arranges again');
 
-  // ── 다시 눌러도 그대로
+  // ── 정렬 버튼은 누를 때마다 → 나가는 흐름 / ← 들어오는 흐름 중심을 번갈아 한다
+  const dir = () => win.textContent('[data-testid=sort-dir]');
+  assert((await dir()) === '←', 'after arranging, the button offers ← (incoming flow) next');
+
+  // ── 보드를 고친 뒤(메모만) 누르면 다시 → 부터. 이미 정렬된 보드는 그대로 (Undo 기록도 없음)
+  await win.evaluate(() => {
+    const s = window.__tf.getState();
+    s.commit({ ...s.doc, nodes: { ...s.doc.nodes, h: { ...s.doc.nodes.h, note: '나중에 예약' } } });
+  });
+  assert((await dir()) === '→', 'after an edit the next press starts again at →');
   const pastNow = await past();
   await win.click('[data-testid=tool-arrange]');
-  await win.waitForFunction(() => window.__tf.getState().aiActivity?.message.includes('이미'));
-  assert(JSON.stringify(positions(await doc())) === JSON.stringify(positions(after)) && (await past()) === pastNow, 'pressing it again changes nothing');
+  await win.waitForFunction(() => window.__tf.getState().aiActivity?.message === '이미 보기 좋게 정렬되어 있습니다');
+  assert(JSON.stringify(positions(await doc())) === JSON.stringify(positions(after)) && (await past()) === pastNow, 'pressing → again on an arranged board changes nothing');
 
-  // ── 알림의 되돌리기 버튼, 메뉴의 "정렬"
+  // ── 한 번 더: ← 들어오는 흐름 중심 (선택 없음 → 흐름의 끝 Box가 중심). 겹치지 않고 Route가 Box를 지나지 않는다.
+  assert((await dir()) === '←', 'the next press is ← incoming flow');
+  await win.click('[data-testid=tool-arrange]');
+  await win.waitForFunction(() => window.__tf.getState().aiActivity?.message.includes('들어오는 흐름(←)'));
+  await win.waitForTimeout(700);
+  const inDoc = await doc();
+  const inRects = await win.$$eval('[data-testid=box]', (els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+  assert(inRects.every((p, i) => inRects.every((q, j) => i === j || !overlap(p, q))), 'incoming layout: no boxes overlap');
+  assert((await routeCrossings()).length === 0, 'incoming layout: routes do not cross other boxes');
+  assert(
+    Object.values(inDoc.edges).every((e) => JSON.stringify([e.sourceNodeId, e.targetNodeId]) === JSON.stringify([orig.edges[e.id].sourceNodeId, orig.edges[e.id].targetNodeId])),
+    'route directions and connections never change',
+  );
+  assert((await dir()) === '→', '…and the button goes back to →');
+  await win.screenshot({ path: 'e2e/out/phase19-incoming.png' });
+
+  // ── 알림의 되돌리기 버튼 → 바로 앞 모양으로. 메뉴의 "정렬"도 같은 버튼과 같다.
+  await win.click('[data-testid=ai-toast-undo]');
+  assert(JSON.stringify(positions(await doc())) === JSON.stringify(positions(after)), "the notice's 되돌리기 restores the layout before that sort");
   await win.keyboard.press('Control+z');
+  await win.keyboard.press('Control+z');
+  assert(JSON.stringify(positions(await doc())) === JSON.stringify(positions(orig)), 'Ctrl+Z all the way back restores the hand-drawn board');
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('menu-command', 'arrange'));
   await arranged();
   await win.waitForTimeout(600);
-  assert(JSON.stringify(positions(await doc())) === JSON.stringify(positions(after)), 'menu "정렬" arranges too');
-  await win.click('[data-testid=ai-toast-undo]');
-  assert(JSON.stringify(positions(await doc())) === JSON.stringify(positions(orig)), "the notice's 되돌리기 restores the original");
-  await win.click('[data-testid=tool-arrange]');
-  await arranged();
-  await win.waitForTimeout(600);
+  assert(JSON.stringify(positions(await doc())) === JSON.stringify(positions(after)), 'menu "정렬" arranges too (→ first)');
 
   // ── 자동 저장
   await waitSaved();

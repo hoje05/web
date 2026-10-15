@@ -176,3 +176,136 @@ describe('정렬 (arrangeDoc)', () => {
     expect(hits, `${hits} of ${routes} routes cross another box`).toBe(0);
   });
 });
+
+describe('정렬 — 들어오는 흐름 중심 (Incoming)', () => {
+  const col = (d: Doc, id: string) => d.nodes[id].x + d.nodes[id].width / 2;
+  const IN = { mode: 'in' as const };
+
+  it('선택한 C를 중심으로: E → B는 왼쪽, A·B·D는 C로 모인다 (A→C, B→C, D→C, E→B)', () => {
+    const doc = make([box('a', 0, 300), box('b', 0, 0), box('c', 400, 150), box('d', 0, 600), box('e', -400, 0)], [['a', 'c'], ['b', 'c'], ['d', 'c'], ['e', 'b']]);
+    const r = arrangeDoc(doc, { mode: 'in', center: 'c' });
+    const n = r.nodes;
+    expect(col(r, 'a')).toBe(col(r, 'b'));
+    expect(col(r, 'b')).toBe(col(r, 'd'));
+    expect(col(r, 'e')).toBeLessThan(col(r, 'b'));
+    expect(col(r, 'c')).toBeGreaterThan(col(r, 'a'));
+    // C는 들어오는 Box들의 가운데 높이, E → B 는 한 줄
+    const ys = ['a', 'b', 'd'].map((id) => cy(n[id])).sort((p, q) => p - q);
+    expect(cy(n.c)).toBe(ys[1]);
+    expect(cy(n.e)).toBe(cy(n.b));
+    expect(overlapsOf(r)).toEqual([]);
+    expect(routeHits(r)).toEqual([]);
+  });
+
+  it('나가는 흐름과 다른 점: 중간 Box는 뒤 Box 바로 앞 열로 (A→B→C→D, A→E, E→D)', () => {
+    const doc = make([box('a', 0, 0), box('b', 300, 0), box('c', 600, 0), box('d', 900, 0), box('e', 300, 200)], [['a', 'b'], ['b', 'c'], ['c', 'd'], ['a', 'e'], ['e', 'd']]);
+    const out = arrangeDoc(doc);
+    const inn = arrangeDoc(doc, IN);
+    expect(col(out, 'e')).toBe(col(out, 'b')); // 나가는 흐름: A 바로 다음
+    expect(col(inn, 'e')).toBe(col(inn, 'c')); // 들어오는 흐름: D 바로 앞
+    expect(overlapsOf(inn)).toEqual([]);
+  });
+
+  it('선택이 없으면 묶음마다 흐름의 끝 Box가 중심 (여러 끝이면 가장 많은 흐름이 모이는 Box)', () => {
+    // 끝: d (a,b,c가 모임), x (b만). 중심 = d → a·b·c는 d를 향해, x는 b 바로 다음
+    const doc = make([box('a', 0, 0), box('b', 0, 200), box('c', 300, 100), box('d', 600, 100), box('x', 300, 400)], [['a', 'c'], ['b', 'c'], ['c', 'd'], ['b', 'x']]);
+    const r = arrangeDoc(doc, IN);
+    expect(col(r, 'd')).toBeGreaterThan(col(r, 'c'));
+    expect(col(r, 'c')).toBeGreaterThan(col(r, 'a'));
+    expect(col(r, 'a')).toBe(col(r, 'b'));
+    expect(col(r, 'x')).toBe(col(r, 'c'));
+  });
+
+  it('중심이 끝이 아니어도: 앞 흐름은 왼쪽, 뒤 흐름은 오른쪽 (A → B → C, B 선택)', () => {
+    const doc = make([box('a', 600, 0), box('b', 300, 300), box('c', 0, 0)], [['a', 'b'], ['b', 'c']]);
+    const r = arrangeDoc(doc, { mode: 'in', center: 'b' });
+    expect(col(r, 'a')).toBeLessThan(col(r, 'b'));
+    expect(col(r, 'b')).toBeLessThan(col(r, 'c'));
+  });
+
+  it('순환이 있어도 멈추고, 중심으로 들어오는 Route는 앞으로 간다 (A → B → C → A)', () => {
+    const doc = make([box('a', 0, 0), box('b', 300, 0), box('c', 150, 200)], [['a', 'b'], ['b', 'c'], ['c', 'a']]);
+    for (const center of ['a', 'b', 'c', null]) {
+      const r = arrangeDoc(doc, { mode: 'in', center });
+      expect(overlapsOf(r)).toEqual([]);
+      if (center) {
+        // 중심으로 들어오는 Route: 오른쪽 면 → 왼쪽 면 (되돌아가지 않음)
+        const into = Object.values(r.edges).find((e) => e.targetNodeId === center)!;
+        expect(into.sourceAnchor.side).toBe('right');
+        expect(col(r, center)).toBe(Math.max(...['a', 'b', 'c'].map((id) => col(r, id))));
+      }
+      expect(arrangeDoc(r, { mode: 'in', center })).toBe(r);
+    }
+  });
+
+  it('나가는 흐름 + 선택: 그 Box에서 나가는 흐름 기준 (순환을 그 Box부터 끊는다)', () => {
+    const doc = make([box('a', 0, 0), box('b', 300, 0), box('c', 150, 200)], [['a', 'b'], ['b', 'c'], ['c', 'a']]);
+    const r = arrangeDoc(doc, { mode: 'out', center: 'c' });
+    expect(col(r, 'c')).toBeLessThan(col(r, 'a'));
+    expect(col(r, 'a')).toBeLessThan(col(r, 'b'));
+    // 선택이 없으면 기존 정렬 그대로
+    expect(arrangeDoc(doc, { mode: 'out' })).toEqual(arrangeDoc(doc));
+    expect(arrangeDoc(doc, { mode: 'out', center: null })).toEqual(arrangeDoc(doc));
+  });
+
+  it('위치와 Route 모양만 바뀐다: id, 방향, 글, 메모, 태그, 첨부는 그대로', () => {
+    const doc = make([box('a', 0, 300), box('b', 500, 0), box('c', 200, 150)], [['a', 'b'], ['c', 'b']]);
+    doc.tags = { t: { id: 't', name: 'AI', normalizedName: 'ai', active: true } };
+    doc.nodes.a = {
+      ...doc.nodes.a,
+      note: '메모',
+      tagIds: ['t'],
+      attachments: [{ id: 'x', type: 'file', name: 'r.csv', relativePath: 'assets/1-r.csv', mimeType: 'text/csv', size: 3 }],
+    };
+    const r = arrangeDoc(doc, { mode: 'in', center: 'b' });
+    expect(r).not.toBe(doc);
+    expect(r.tags).toBe(doc.tags);
+    for (const id of Object.keys(doc.nodes)) {
+      const { x: _x, y: _y, ...rest } = r.nodes[id];
+      const { x: _ox, y: _oy, ...orig } = doc.nodes[id];
+      expect(rest).toEqual(orig);
+    }
+    for (const e of Object.values(doc.edges)) {
+      expect([r.edges[e.id].sourceNodeId, r.edges[e.id].targetNodeId]).toEqual([e.sourceNodeId, e.targetNodeId]);
+    }
+  });
+
+  it('무작위 보드 (들어오는 흐름, 중심 있음·없음): 겹치지 않고, Route는 오른쪽으로, 다시 정렬해도 그대로', () => {
+    let seed = 7;
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    let hits = 0;
+    let routes = 0;
+    let unstable = 0;
+    for (let k = 0; k < 150; k++) {
+      const n = 3 + Math.floor(rand() * 14);
+      const nodes = Array.from({ length: n }, (_, i) =>
+        box(`n${i}`, Math.round(rand() * 1600), Math.round(rand() * 1000), 140 + Math.round(rand() * 160), 48 + Math.round(rand() * 60)),
+      );
+      const edges: [string, string][] = [];
+      const m = Math.floor(rand() * n * 1.6);
+      for (let j = 0; j < m; j++) {
+        const a = Math.floor(rand() * n);
+        const b = Math.floor(rand() * n);
+        if (a !== b) edges.push([`n${a}`, `n${b}`]);
+      }
+      const opts = { mode: 'in' as const, center: k % 2 ? `n${Math.floor(rand() * n)}` : null };
+      const out = arrangeDoc(make(nodes, edges), opts);
+      expect(overlapsOf(out), `board ${k}`).toEqual([]);
+      for (const e of Object.values(out.edges)) {
+        const a = out.nodes[e.sourceNodeId];
+        const b = out.nodes[e.targetNodeId];
+        if (e.sourceAnchor.side === 'right') expect(b.x, `board ${k} ${e.id}`).toBeGreaterThan(a.x + a.width);
+        else expect(a.x, `board ${k} ${e.id}`).toBeGreaterThan(b.x + b.width);
+      }
+      if (arrangeDoc(out, opts) !== out) unstable++;
+      hits += routeHits(out).length;
+      routes += edges.length;
+    }
+    expect(unstable, 'boards that change when arranged again').toBe(0);
+    // 되돌아가는 통로 곡선이 Box 모서리를 몇 px 스치는 드문 경우가 있다 (나가는 흐름 정렬과 같은 수준)
+    expect(hits / routes, `${hits} of ${routes} routes cross another box`).toBeLessThan(0.005);
+  });
+});

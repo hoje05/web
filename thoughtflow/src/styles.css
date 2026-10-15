@@ -165,6 +165,23 @@ svg.layer {
   outline-offset: 1px;
 }
 
+/* 정렬 버튼의 방향: → 나가는 흐름(초록) / ← 들어오는 흐름(보라) — Box를 선택했을 때 Route 색과 같은 뜻 */
+.sort-dir {
+  font-weight: 700;
+}
+
+.tool-button[data-sort-mode='out'] .sort-dir {
+  color: var(--outgoing);
+}
+
+.tool-button[data-sort-mode='in'] .sort-dir {
+  color: var(--incoming);
+}
+
+.tool-button:disabled .sort-dir {
+  color: inherit;
+}
+
 .toolbar-sep {
   height: 1px;
   margin: 3px 6px;
