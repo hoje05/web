@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import type React from 'react';
 import { NoteEditor, type NoteEditorHandle } from '../editor/NoteEditor';
 import { incomingEdges, outgoingEdges } from '../model/graph';
 import type { BoxNode, Doc } from '../model/types';
@@ -18,6 +19,7 @@ export function SidePanel() {
   const nodes = useStore((s) => s.doc.nodes);
   const query = useStore((s) => s.searchQuery);
   const tabsRef = useRef<HTMLDivElement>(null);
+  const dragScroll = useDragScroll(tabsRef);
 
   // 활성 탭이 보이도록 가로 스크롤
   useEffect(() => {
@@ -36,6 +38,7 @@ export function SidePanel() {
           className="panel-tabs"
           role="tablist"
           ref={tabsRef}
+          {...dragScroll}
           onWheel={(e) => {
             // 세로 휠로도 탭 줄을 가로로 스크롤
             if (tabsRef.current && Math.abs(e.deltaY) > Math.abs(e.deltaX)) tabsRef.current.scrollLeft += e.deltaY;
@@ -98,6 +101,61 @@ export function SidePanel() {
 }
 
 const firstLine = (text: string) => text.split('\n')[0].trim() || '제목 없음';
+
+/** 이만큼 넘게 움직이면 클릭이 아니라 끌기 */
+const DRAG_THRESHOLD = 6;
+
+/**
+ * 탭 줄 전체를 왼쪽 버튼으로 잡고 좌우로 끌어 넘겨 보기 (탭 위, 탭 사이, 빈 곳 어디서든).
+ * 조금만 움직였다 놓으면 원래대로 클릭(탭 열기·닫기)이고, 끌었다 놓으면 그 클릭은 무시한다.
+ * 화면을 다시 그리지 않도록 상태 대신 ref와 scrollLeft만 쓴다.
+ */
+function useDragScroll(ref: React.RefObject<HTMLDivElement | null>) {
+  const drag = useRef<{ id: number; x: number; left: number; moved: boolean } | null>(null);
+  const swallowClick = useRef(false);
+  const end = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    drag.current = null;
+    const el = ref.current;
+    el?.classList.remove('is-dragging');
+    if (el?.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    if (d.moved) {
+      // 이어서 오는 click을 한 번 막는다 (click이 오지 않는 경우를 위해 잠시 뒤 풀어 둔다)
+      swallowClick.current = true;
+      setTimeout(() => (swallowClick.current = false), 0);
+    }
+  };
+  return {
+    onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0 || !e.isPrimary || !ref.current) return;
+      drag.current = { id: e.pointerId, x: e.clientX, left: ref.current.scrollLeft, moved: false };
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
+      const d = drag.current;
+      const el = ref.current;
+      if (!d || d.id !== e.pointerId || !el) return;
+      const dx = e.clientX - d.x;
+      if (!d.moved) {
+        if (Math.abs(dx) <= DRAG_THRESHOLD) return;
+        d.moved = true;
+        // 손가락을 밀듯이 움직인 만큼 그대로 따라온다. 탭 줄 밖으로 나가도 계속 끌 수 있게 포인터를 잡는다.
+        el.setPointerCapture(e.pointerId);
+        el.classList.add('is-dragging');
+      }
+      el.scrollLeft = d.left - dx;
+    },
+    onPointerUp: end,
+    onPointerCancel: end,
+    onLostPointerCapture: end,
+    onClickCapture: (e: React.MouseEvent) => {
+      if (!swallowClick.current) return;
+      swallowClick.current = false;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+  };
+}
 
 /**
  * 입력칸에 머무는 동안의 변경을 Undo 한 번으로 묶는다.
