@@ -2,7 +2,7 @@
 // Windows: npm run e2e   /  Linux(화면 없음): xvfb-run -a npm run e2e
 import { spawnSync } from 'node:child_process';
 
-const files = ['phase2.mjs', 'phase3.mjs', 'phase6.mjs', 'phase9.mjs', 'phase11.mjs', 'phase13.mjs', 'phase14.mjs', 'phase15.mjs', 'phase16.mjs', 'phase17.mjs', 'phase18.mjs', 'phase19.mjs', 'phase20.mjs', 'phase21.mjs', 'phase22.mjs', 'phase23.mjs'];
+const files = ['phase2.mjs', 'phase3.mjs', 'phase6.mjs', 'phase9.mjs', 'phase11.mjs', 'phase13.mjs', 'phase14.mjs', 'phase15.mjs', 'phase16.mjs', 'phase17.mjs', 'phase18.mjs', 'phase19.mjs', 'phase20.mjs', 'phase21.mjs', 'phase22.mjs', 'phase23.mjs', 'phase24.mjs'];
 let failed = 0;
 for (const f of files) {
   console.log(`\n▶ ${f}`);

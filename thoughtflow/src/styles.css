@@ -2022,6 +2022,200 @@ svg.layer {
   color: var(--muted);
 }
 
+.ai-section > .ai-label {
+  margin-top: 14px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.ai-secondary {
+  padding: 5px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ai-secondary:hover:not(:disabled) {
+  background: var(--panel-hover);
+}
+
+.ai-secondary:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+/* 주소 만드는 방법 고르기 */
+.ai-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.ai-seg-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-seg-option.is-on {
+  border-color: #7c5cff;
+  background: rgba(124, 92, 255, 0.1);
+}
+
+.ai-seg-title {
+  font-weight: 600;
+}
+
+.ai-seg-sub {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.ai-ngrok {
+  margin: 6px 0;
+}
+
+.ai-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.ai-form .ai-primary {
+  align-self: flex-start;
+}
+
+.ai-input {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  outline: none;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.ai-input:focus {
+  border-color: #7c5cff;
+}
+
+.ai-progress {
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--panel-border);
+  overflow: hidden;
+}
+
+.ai-progress span {
+  display: block;
+  height: 100%;
+  background: #7c5cff;
+  transition: width 120ms linear;
+}
+
+.ai-old-url {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  word-break: break-all;
+}
+
+/* 연결 점검 */
+.ai-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.ai-check .ai-sub {
+  margin: 0;
+}
+
+.ai-diag {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.ai-diag ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ai-diag li {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12.5px;
+}
+
+.ai-diag-icon {
+  flex: 0 0 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ai-diag li.is-ok .ai-diag-icon {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--outgoing);
+}
+
+.ai-diag li.is-warn .ai-diag-icon {
+  background: rgba(245, 196, 81, 0.15);
+  color: var(--match);
+}
+
+.ai-diag li.is-error .ai-diag-icon {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--danger);
+}
+
+.ai-diag li.is-info .ai-diag-icon {
+  background: var(--panel-hover);
+  color: var(--muted);
+}
+
+.ai-diag-detail {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.ai-diag-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
 .ai-details {
   margin-top: 8px;
   color: var(--muted);

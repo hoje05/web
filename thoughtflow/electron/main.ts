@@ -391,6 +391,19 @@ function registerIpc() {
     },
   );
 
+  /** 안내에 나오는 몇몇 사이트만 기본 브라우저로 연다 (ChatGPT 플러그인, Claude 커넥터·다운로드, ngrok 가입·토큰) */
+  ipcMain.handle('app:open-external', async (_e, url: unknown) => {
+    const allowed = ['chatgpt.com', 'claude.ai', 'dashboard.ngrok.com', 'ngrok.com'];
+    try {
+      const u = new URL(String(url));
+      if (u.protocol !== 'https:' || !allowed.includes(u.hostname)) return false;
+      await shell.openExternal(u.toString());
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
   ipcMain.handle('app:alert', async (_e, message: string) => {
     await dialog.showMessageBox(mainWindow!, { type: 'error', title: 'ThoughtFlow', message });
   });

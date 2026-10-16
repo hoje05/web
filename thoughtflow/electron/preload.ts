@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
-import type { AiRequest, AiResponse, AiSettings, AiState } from '../src/ai/protocol';
+import type { AiRequest, AiResponse, AiSettings, AiState, Diagnosis } from '../src/ai/protocol';
 
 type AttachResult = {
   attachments: {
@@ -35,6 +35,8 @@ const api = {
     assetsFrom?: string | null;
   }): Promise<{ canceled: true } | { canceled: false; filePath: string }> => ipcRenderer.invoke('file:save', args),
   alert: (message: string): Promise<void> => ipcRenderer.invoke('app:alert', message),
+  /** 안내에 나오는 사이트(ChatGPT·Claude·ngrok)만 기본 브라우저로 연다 */
+  openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('app:open-external', url),
   confirm: (message: string): Promise<boolean> => ipcRenderer.invoke('app:confirm', message),
   startupFile: (): Promise<string | null> => ipcRenderer.invoke('app:startup-file'),
   setLastFile: (filePath: string | null) => ipcRenderer.send('app:set-last-file', filePath),
@@ -110,6 +112,12 @@ const api = {
   aiInstallClaude: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('ai:install-claude'),
   aiSaveExtension: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('ai:save-extension'),
   aiClaudeConfig: (): Promise<string> => ipcRenderer.invoke('ai:claude-config'),
+  aiSetNgrok: (patch: { token?: string; domain?: string }): Promise<AiState> => ipcRenderer.invoke('ai:set-ngrok', patch),
+  aiDownloadTunnel: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('ai:download-tunnel'),
+  aiAckUrl: (): Promise<AiState> => ipcRenderer.invoke('ai:ack-url'),
+  aiDiagnose: (): Promise<Diagnosis> => ipcRenderer.invoke('ai:diagnose'),
+  aiClaudeRegister: (): Promise<{ ok: true; files: string[] } | { ok: false; error: string }> => ipcRenderer.invoke('ai:claude-register'),
+  aiClaudeUnregister: (): Promise<{ ok: true; removed: number } | { ok: false; error: string }> => ipcRenderer.invoke('ai:claude-unregister'),
 
   onOpenPath: (callback: (filePath: string) => void) => {
     const listener = (_e: IpcRendererEvent, filePath: string) => callback(filePath);

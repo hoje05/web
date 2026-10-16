@@ -9,7 +9,7 @@
  * OS 접근은 Electron preload가 노출한 window.thoughtflow API로만 한다.
  */
 import { flushEditing } from '../interaction/editing';
-import type { AiRequest, AiResponse, AiSettings, AiState } from '../ai/protocol';
+import type { AiRequest, AiResponse, AiSettings, AiState, Diagnosis } from '../ai/protocol';
 import { EMPTY_DOC, type Attachment, type Doc } from '../model/types';
 import { useStore } from '../store/store';
 import { attachmentPaths, FILE_EXTENSION, parseBoard, serializeBoard } from './fileFormat';
@@ -22,6 +22,7 @@ type Api = {
   newBoardPath: () => Promise<string>;
   saveFile: (args: { filePath: string | null; content: string; suggestedName: string; assetsFrom?: string | null }) => Promise<SaveResult>;
   alert: (message: string) => Promise<void>;
+  openExternal: (url: string) => Promise<boolean>;
   confirm: (message: string) => Promise<boolean>;
   startupFile: () => Promise<string | null>;
   setLastFile: (filePath: string | null) => void;
@@ -62,6 +63,12 @@ type Api = {
   aiInstallClaude: () => Promise<{ ok: boolean; error?: string }>;
   aiSaveExtension: () => Promise<{ ok: boolean; error?: string }>;
   aiClaudeConfig: () => Promise<string>;
+  aiSetNgrok: (patch: { token?: string; domain?: string }) => Promise<AiState>;
+  aiDownloadTunnel: () => Promise<{ ok: boolean; error?: string }>;
+  aiAckUrl: () => Promise<AiState>;
+  aiDiagnose: () => Promise<Diagnosis>;
+  aiClaudeRegister: () => Promise<{ ok: true; files: string[] } | { ok: false; error: string }>;
+  aiClaudeUnregister: () => Promise<{ ok: true; removed: number } | { ok: false; error: string }>;
 };
 
 /** 프로젝트 = 보드 파일 하나 */
