@@ -32,6 +32,7 @@ import {
   type Viewport,
 } from '../model/types';
 import { normalizeTagName } from '../model/tags';
+import { noteImagePaths } from '../editor/markdown';
 import { MAX_ZOOM, MIN_ZOOM } from '../viewport/viewport';
 
 export const FILE_FORMAT = 'thoughtflow';
@@ -238,9 +239,12 @@ function parseAttachment(raw: unknown): Attachment | null {
   };
 }
 
-/** Doc 안의 모든 첨부 파일 경로 (자료 폴더 정리용) */
+/** Doc 안에서 쓰는 모든 자료 파일 경로: 첨부 + 메모 안의 그림 (자료 폴더 정리 때 지우지 않도록) */
 export function attachmentPaths(doc: Doc): string[] {
   const out = new Set<string>();
-  for (const n of Object.values(doc.nodes)) for (const a of n.attachments ?? []) out.add(a.relativePath);
+  for (const n of Object.values(doc.nodes)) {
+    for (const a of n.attachments ?? []) out.add(a.relativePath);
+    if (n.note.includes('](')) for (const p of noteImagePaths(n.note)) out.add(p);
+  }
   return [...out];
 }

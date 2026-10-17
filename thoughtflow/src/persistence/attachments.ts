@@ -55,12 +55,17 @@ export async function pickAttachments(nodeId: string, kind: 'image' | 'any' = 'a
   return record(nodeId, project, res);
 }
 
-/** 끌어다 놓은 파일 · 붙여 넣은 이미지 */
+/** 끌어다 놓은 파일 · 붙여 넣은 이미지 → Box의 첨부로 */
 export async function attachFiles(nodeId: string, files: File[]): Promise<number> {
   if (!files.length) return 0;
   const project = await projectPath();
   if (!project || !desktopApi) return 0;
-  const api = desktopApi;
+  return record(nodeId, project, await importFiles(project, files));
+}
+
+/** 파일들을 자료 폴더로 복사만 한다 (Box의 첨부로 기록하지 않음 — 메모 안의 그림 등) */
+async function importFiles(project: string, files: File[]): Promise<AttachResult> {
+  const api = desktopApi!;
   const withPath: string[] = [];
   const data: { name: string; mimeType: string; data: Uint8Array }[] = [];
   for (const f of files) {
@@ -78,7 +83,20 @@ export async function attachFiles(nodeId: string, files: File[]): Promise<number
     res.attachments.push(...r.attachments);
     res.errors.push(...r.errors);
   }
-  return record(nodeId, project, res);
+  return res;
+}
+
+/**
+ * 메모에 넣을 그림: 파일 고르기(files 없음) 또는 붙여 넣기·끌어다 놓기(files) → 자료 폴더로 복사.
+ * 그림이 아닌 파일은 돌려주지 않는다. 가져오는 사이 다른 프로젝트로 바뀌었으면 넣지 않는다.
+ */
+export async function importNoteImages(files?: File[]): Promise<{ src: string; alt: string }[]> {
+  const project = await projectPath();
+  if (!project || !desktopApi) return [];
+  const res = files ? await importFiles(project, files) : await desktopApi.attachPick(project, 'image').catch(failed);
+  if (res.errors.length) await alertUser(`일부 그림을 넣지 못했습니다.\n${res.errors.join('\n')}`);
+  if (useStore.getState().filePath !== project) return [];
+  return res.attachments.filter((a) => a.type === 'image').map((a) => ({ src: a.relativePath, alt: a.name.replace(/\.[^.]+$/, '') }));
 }
 
 /** 붙여 넣은 이미지의 이름: "붙여넣은 이미지 2026-10-15 14.05.png" */
@@ -112,8 +130,12 @@ const base64url = (text: string) => {
 
 /** 이미지를 보여 줄 주소 (자료 폴더 안 파일만 열린다) */
 export function assetUrl(filePath: string | null, a: Attachment): string | null {
-  if (!filePath || !desktopApi) return null;
-  return `tfasset://p/${base64url(filePath)}/${encodeURIComponent(a.relativePath.slice('assets/'.length))}`;
+  return assetUrlFor(filePath, a.relativePath);
+}
+
+export function assetUrlFor(filePath: string | null, relativePath: string): string | null {
+  if (!filePath || !desktopApi || !relativePath.startsWith('assets/')) return null;
+  return `tfasset://p/${base64url(filePath)}/${encodeURIComponent(relativePath.slice('assets/'.length))}`;
 }
 
 /** 이 PC의 기본 프로그램으로 열기 */

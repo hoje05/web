@@ -26,6 +26,8 @@ import type { Node as PmNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import Suggestion, { type SuggestionProps } from '@tiptap/suggestion';
+import { NoteChart, NoteHostExtension, NoteImage, TrailingLine, type NoteHost } from './blocks';
+import { SAMPLE_CHART } from './chart';
 
 // ───────────── "/" 메뉴 ─────────────
 
@@ -36,7 +38,20 @@ export interface SlashItem {
   hint: string;
   icon: string;
   keywords: string[];
-  run: (chain: ChainedCommands) => void;
+  run: (chain: ChainedCommands, editor: Editor) => void;
+}
+
+/** "/이미지": 그림 파일을 골라 지금 자리에 넣는다 */
+async function insertPickedImages(editor: Editor) {
+  const host = (editor.storage as unknown as { noteHost?: { host: NoteHost } }).noteHost?.host;
+  const pos = editor.state.selection.from;
+  const images = (await host?.pickImages()) ?? [];
+  if (!images.length || editor.isDestroyed) return;
+  editor
+    .chain()
+    .focus()
+    .insertContentAt(Math.min(pos, editor.state.doc.content.size), images.map((attrs) => ({ type: 'noteImage', attrs: { ...attrs, width: null } })))
+    .run();
 }
 
 export const SLASH_ITEMS: SlashItem[] = [
@@ -50,6 +65,25 @@ export const SLASH_ITEMS: SlashItem[] = [
   { id: 'quote', label: '인용', hint: '>', icon: '❝', keywords: ['quote', 'blockquote', '인용'], run: (c) => c.toggleBlockquote().run() },
   { id: 'code', label: '코드', hint: '```', icon: '</>', keywords: ['code', 'codeblock', '코드'], run: (c) => c.toggleCodeBlock().run() },
   { id: 'divider', label: '구분선', hint: '---', icon: '—', keywords: ['divider', 'hr', 'line', 'separator', '구분', '선'], run: (c) => c.setHorizontalRule().run() },
+  {
+    id: 'image',
+    label: '그림',
+    hint: '붙여넣기',
+    icon: '🖼',
+    keywords: ['image', 'picture', 'photo', 'img', '그림', '이미지', '사진'],
+    run: (c, editor) => {
+      c.run();
+      void insertPickedImages(editor);
+    },
+  },
+  {
+    id: 'chart',
+    label: '그래프',
+    hint: '```chart',
+    icon: '📊',
+    keywords: ['chart', 'graph', 'plot', 'bar', 'line', 'pie', '그래프', '차트', '막대', '꺾은선', '원'],
+    run: (c) => c.insertContent({ type: 'noteChart', attrs: { source: SAMPLE_CHART, fresh: true } }).run(),
+  },
 ];
 
 export function filterSlash(query: string): SlashItem[] {
@@ -83,7 +117,7 @@ const SlashCommand = Extension.create<{ onState: (view: SlashView | null) => voi
         // 코드 블록 안에서는 그냥 글자
         allow: ({ state, range }) => !state.doc.resolve(range.from).parent.type.spec.code,
         items: ({ query }) => filterSlash(query),
-        command: ({ editor, range, props }) => props.run(editor.chain().focus().deleteRange(range)),
+        command: ({ editor, range, props }) => props.run(editor.chain().focus().deleteRange(range), editor),
         render: () => {
           let current: SuggestionProps<SlashItem, SlashItem> | null = null;
           let index = 0;
@@ -236,7 +270,7 @@ export function noteExtensions(opts: { onSlash: (view: SlashView | null) => void
     Gapcursor,
     Placeholder.configure({
       placeholder: ({ editor, node }: { editor: Editor; node: PmNode }) => {
-        if (editor.isEmpty) return "이 생각에 대해 자유롭게 적어 보세요…  ( '/' 를 누르면 제목·목록·체크박스 )";
+        if (editor.isEmpty) return "이 생각에 대해 자유롭게 적어 보세요…  ( '/' 를 누르면 제목·목록·체크박스·그림·그래프 )";
         if (!editor.isFocused) return '';
         if (node.type.name === 'heading') return `제목 ${node.attrs.level}`;
         return "'/' 를 눌러 블록 선택";
@@ -245,5 +279,9 @@ export function noteExtensions(opts: { onSlash: (view: SlashView | null) => void
     SlashCommand.configure({ onState: opts.onSlash }),
     SearchHighlight,
     NoteKeys,
+    NoteHostExtension,
+    NoteImage,
+    NoteChart,
+    TrailingLine,
   ];
 }

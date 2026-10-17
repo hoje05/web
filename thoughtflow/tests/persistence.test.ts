@@ -165,3 +165,17 @@ describe('file format', () => {
     expect(() => parseBoard('{"format":"thoughtflow","version":99,"nodes":[],"edges":[]}')).toThrow(/새로운 버전/);
   });
 });
+
+describe('asset cleanup', () => {
+  it('keeps pictures used inside notes as well as attachments', async () => {
+    const { attachmentPaths } = await import('../src/persistence/fileFormat');
+    const d: Doc = {
+      tags: {},
+      edges: {},
+      nodes: {
+        a: { id: 'a', x: 0, y: 0, width: 1, height: 1, text: '', note: '메모\n![그래프](assets/11-g.png)\n- ![사진](<assets/22-a b.png> "width=50%")', attachments: [{ id: 'x', type: 'file', name: 'r.csv', relativePath: 'assets/33-r.csv', mimeType: 'text/csv', size: 1 }] },
+      },
+    };
+    expect(attachmentPaths(d).sort()).toEqual(['assets/11-g.png', 'assets/22-a b.png', 'assets/33-r.csv']);
+  });
+});

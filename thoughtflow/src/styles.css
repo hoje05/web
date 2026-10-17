@@ -2906,3 +2906,424 @@ svg.layer {
     animation: none;
   }
 }
+
+/* ───────────── 메모 안의 그림 ───────────── */
+
+.note-editor .note-image {
+  margin: 8px 0;
+}
+
+.note-image-frame {
+  position: relative;
+  max-width: 100%;
+  width: fit-content;
+  border-radius: 8px;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 80ms;
+}
+
+.note-image-frame img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: 560px;
+  object-fit: contain;
+  border-radius: 8px;
+  cursor: zoom-in;
+}
+
+.note-image.is-selected .note-image-frame,
+.note-chart.is-selected {
+  outline: 2px solid #7c5cff;
+  outline-offset: 2px;
+}
+
+.note-image-missing {
+  padding: 14px 16px;
+  border: 1px dashed var(--box-border);
+  border-radius: 8px;
+  color: var(--faint);
+  font-size: 12.5px;
+}
+
+.note-image-tools {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.62);
+  opacity: 0;
+  transition: opacity 100ms;
+}
+
+.note-image-frame:hover .note-image-tools,
+.note-image.is-selected .note-image-tools {
+  opacity: 1;
+}
+
+.note-image-tools button,
+.note-chart-tools button {
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #e6e7ea;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.note-image-tools button:hover,
+.note-image-tools button.is-on {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* ───────────── 메모 안의 그래프 ───────────── */
+
+.note-editor .note-chart {
+  position: relative;
+  margin: 10px 0;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.note-chart-tools {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+}
+
+.note-chart-tools button {
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.note-chart-tools button:hover {
+  color: var(--ink);
+}
+
+.note-chart-editor {
+  margin: 22px 0 8px;
+}
+
+.note-chart-editor textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--box-border);
+  border-radius: 7px;
+  outline: none;
+  background: var(--bg);
+  color: var(--ink);
+  font: 12.5px/1.55 Consolas, 'D2Coding', 'Cascadia Mono', monospace;
+}
+
+.note-chart-editor textarea:focus {
+  border-color: #7c5cff;
+}
+
+.note-chart-help {
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+/* 그래프: 어두운 화면용 범주색 (정해진 순서, 색각 이상 검사 통과 — 바탕 #1d1f23 기준) */
+.chart {
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+  --chart-surface: var(--panel-2);
+  --chart-grid: #2a2d33;
+  --chart-axis: #41454d;
+  position: relative;
+  font-size: 12px;
+  user-select: none;
+}
+
+.chart-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-right: 52px;
+  margin-bottom: 6px;
+}
+
+.chart-title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.chart-unit {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chart-key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--k);
+}
+
+.chart-key.is-line {
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.chart-plot {
+  position: relative;
+}
+
+.chart-plot svg {
+  display: block;
+  overflow: visible;
+}
+
+.chart-grid {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.chart-axis {
+  stroke: var(--chart-axis);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.chart-tick {
+  fill: var(--muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-value {
+  fill: var(--ink);
+  font-size: 10.5px;
+}
+
+.chart-bar {
+  transition: filter 80ms;
+}
+
+.chart-bar.is-hover,
+.chart-slice.is-hover {
+  filter: brightness(1.25);
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--k);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-dot {
+  fill: var(--k);
+  stroke: var(--chart-surface);
+  stroke-width: 2;
+}
+
+.chart-crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: 8px;
+  min-width: 96px;
+  max-width: 160px;
+  padding: 6px 9px;
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.chart-tooltip-label {
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.chart-tooltip-name {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-slice {
+  stroke: var(--chart-surface);
+  stroke-width: 2;
+  transition: filter 80ms;
+}
+
+.chart-donut {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.chart-donut-total {
+  fill: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.chart-donut-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chart-donut-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chart-donut-legend li.is-hover {
+  color: var(--ink);
+}
+
+.chart-donut-legend b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.chart-donut-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-donut-pct {
+  color: var(--faint);
+}
+
+.chart-empty {
+  padding: 18px 4px;
+  color: var(--faint);
+  font-size: 12.5px;
+}
+
+.chart-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.chart-note {
+  flex: 1;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.chart-table-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.chart-table-toggle:hover {
+  color: var(--ink);
+}
+
+.chart-table-wrap {
+  max-height: 240px;
+  overflow: auto;
+}
+
+.chart-table {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.chart-table th,
+.chart-table td {
+  padding: 3px 10px;
+  border-bottom: 1px solid var(--panel-border);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.chart-table th {
+  color: var(--muted);
+  font-weight: 500;
+  text-align: left;
+}

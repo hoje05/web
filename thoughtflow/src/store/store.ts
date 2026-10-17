@@ -69,7 +69,8 @@ export interface AppState extends History {
   lastSort: { mode: 'out' | 'in'; doc: Doc } | null;
 
   // ── 첨부 미리보기 · 태그 관리 창 ──
-  preview: { nodeId: string; attachmentId: string } | null;
+  /** 첨부 미리보기 (attachmentId) 또는 메모 안 그림 크게 보기 (image) */
+  preview: { nodeId: string; attachmentId: string } | { nodeId: string; image: { src: string; alt: string } } | null;
   setPreview: (preview: AppState['preview']) => void;
   tagManagerOpen: boolean;
   setTagManagerOpen: (open: boolean) => void;

@@ -133,22 +133,22 @@ try {
     s.commit({ ...s.doc, nodes: { ...s.doc.nodes, A: { ...s.doc.nodes.A, attachments: s.doc.nodes.A.attachments.filter((x) => x.id !== id) } } });
   }, boardDrop.id);
 
-  // ── 붙여 넣기 (메모를 쓰는 중에 Ctrl+V로 이미지)
-  await win.click('.note-editor');
-  await win.keyboard.type('메모');
+  // ── 붙여 넣기: 제목 칸에서 Ctrl+V로 이미지 → Box의 첨부 (메모 칸에 붙이면 메모 안의 그림 — phase25)
+  await win.click('[data-testid=panel-title]');
+  const titleBefore = await win.inputValue('[data-testid=panel-title]');
   await win.evaluate(async () => {
     const c = Object.assign(document.createElement('canvas'), { width: 320, height: 200 });
     c.getContext('2d').fillRect(0, 0, 320, 200);
     const bytes = await new Promise((r) => c.toBlob((b) => r(b.arrayBuffer()), 'image/png'));
     const dt = new DataTransfer();
     dt.items.add(new File([await bytes], 'image.png', { type: 'image/png' }));
-    document.querySelector('.note-editor').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    document.querySelector('[data-testid=panel-title]').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
   });
   await win.waitForFunction(() => window.__tf.getState().doc.nodes.A.attachments.length === 3);
-  assert((await atts())[2].type === 'image', 'pasting an image attaches it');
-  assert(!(await win.locator('.note-editor').textContent()).includes('image.png'), 'the pasted image does not go into the note text');
-  await win.keyboard.type('계속');
-  assert((await win.locator('.note-editor').textContent()).includes('메모계속'), 'typing continues in the note after pasting');
+  assert((await atts())[2].type === 'image', 'pasting an image (outside the note) attaches it');
+  assert((await win.inputValue('[data-testid=panel-title]')) === titleBefore, 'the pasted image does not go into the title text');
+  await win.keyboard.type(' 2차');
+  assert((await win.inputValue('[data-testid=panel-title]')) === `${titleBefore} 2차`, 'typing continues after pasting');
 
   // ── Scenario 5: CSV와 PDF
   await pickReturns([files.csv, files.pdf, files.json]);

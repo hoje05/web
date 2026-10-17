@@ -7,6 +7,8 @@
  *   # 제목1   ## 제목2   ### 제목3
  *   - 글머리 목록   1. 번호 목록   - [ ] 할 일   - [x] 한 일    (2칸 들여쓰면 안쪽 목록)
  *   > 인용   ``` 코드 ```   --- 구분선
+ *   ![설명](assets/그림.png)  ← 한 줄에 그림 하나 (프로젝트 자료 폴더의 파일). "width=50%"를 붙이면 크기
+ *   ```chart … ```            ← 그래프 (src/editor/chart.ts의 글 형식)
  *   **굵게**  *기울임*  ~~취소선~~  `코드`      \* 처럼 \ 를 앞에 붙이면 그 글자 그대로
  *
  * 굵게·기울임은 CommonMark의 복잡한 규칙 대신 "표시 앞뒤에 공백이 없으면 짝을 맞춘다"만 쓴다.
@@ -21,7 +23,7 @@ const MARK_ORDER = ['bold', 'italic', 'strike', 'code'] as const;
 const DELIM: Record<InlineMark, string> = { bold: '**', italic: '*', strike: '~~' };
 
 /** \ 뒤에 오면 그 글자 그대로가 되는 글자 */
-const ESCAPABLE = '\\`*~_#-+>.)[]';
+const ESCAPABLE = '\\`*~_#-+>.)[]!';
 
 const FENCE = /^(\s*)(```|~~~)(.*)$/;
 const HR = /^\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$/;
@@ -29,13 +31,46 @@ const HEADING = /^ {0,3}(#{1,6}) (.*)$/;
 const QUOTE = /^\s{0,3}> ?(.*)$/;
 const LIST = /^(\s*)([-*+]|\d{1,9}[.)]) (.*)$/;
 const TASK = /^\[([ xX])\](?: (.*))?$/;
+/** 그림 한 줄: ![설명](assets/파일) 또는 ![설명](<assets/공백 있는 파일>), 뒤에 "width=50%" (선택) */
+const IMAGE = /^\s*!\[((?:[^[\]\\]|\\.|\[(?:[^[\]\\]|\\.)*\])*)\]\(\s*(?:<(assets\/[^<>\n]+)>|(assets\/[^\s()<>]+))(?:\s+"([^"]*)")?\s*\)\s*$/;
+const WIDTHS = ['33%', '50%', '66%', '100%'];
+
+/** 메모에서 그림 줄 읽기 (아니면 null) */
+export function imageLine(line: string): { src: string; alt: string; width: string | null } | null {
+  const m = line.match(IMAGE);
+  if (!m) return null;
+  const src = m[2] ?? m[3];
+  if (/(^|\/)\.\.?(\/|$)/.test(src.slice('assets/'.length)) || src.slice('assets/'.length).includes('/')) return null;
+  const width = m[4]?.match(/^width=(\d{1,3}%)$/)?.[1] ?? null;
+  return { src, alt: m[1].replace(/\\(.)/g, '$1'), width: width && WIDTHS.includes(width) ? width : null };
+}
+
+/** 메모에 들어 있는 그림 파일 (자료 폴더 정리 때 지우지 않도록) */
+export function noteImagePaths(md: string): string[] {
+  const out: string[] = [];
+  for (const line of md.split(/\r?\n/)) {
+    const img = imageLine(line.trimStart().replace(/^(?:[-*+]|\d{1,9}[.)]) (?:\[[ xX]\] )?/, '').replace(/^>\s?/, ''));
+    if (img) out.push(img.src);
+  }
+  return out;
+}
 
 const indentOf = (line: string) => line.length - line.trimStart().length;
 
 // ───────────── 읽기: Markdown → 문서 ─────────────
 
+/** 그 뒤에 커서를 둘 수 없는 블록 (그림·그래프) */
+export const BLOCK_ATOMS = ['noteImage', 'noteChart'];
+
+/**
+ * 그림·그래프로 끝나는 메모에는 편집기에서만 빈 줄 하나를 덧붙인다 (그래야 그 뒤에 이어서 쓸 수 있다).
+ * 저장할 때는 그 빈 줄을 빼므로 메모 글은 그대로.
+ */
+const endsWithAtom = (blocks: Node[]) => BLOCK_ATOMS.includes(blocks[blocks.length - 1]?.type ?? '');
+
 export function markdownToDoc(md: string): JSONContent {
   const content = parseBlocks(md.replace(/\r\n?/g, '\n').split('\n'));
+  if (endsWithAtom(content)) content.push({ type: 'paragraph' });
   return { type: 'doc', content: content.length ? content : [{ type: 'paragraph' }] };
 }
 
@@ -59,11 +94,19 @@ function parseBlocks(lines: string[]): Node[] {
       }
       i++; // 닫는 줄 (없으면 끝까지 코드)
       const text = body.join('\n');
+      if (info.trim().toLowerCase() === 'chart') {
+        out.push({ type: 'noteChart', attrs: { source: text } });
+        continue;
+      }
       const node: Node = { type: 'codeBlock', attrs: { language: info.trim() || null } };
       if (text) node.content = [{ type: 'text', text }];
       out.push(node);
     } else if (HR.test(line)) {
       out.push({ type: 'horizontalRule' });
+      i++;
+    } else if (imageLine(line)) {
+      const img = imageLine(line)!;
+      out.push({ type: 'noteImage', attrs: img });
       i++;
     } else if ((m = line.match(HEADING))) {
       const content = parseInline(m[2]);
@@ -209,7 +252,10 @@ export function parseInline(s: string): Node[] {
 // ───────────── 쓰기: 문서 → Markdown ─────────────
 
 export function docToMarkdown(doc: JSONContent): string {
-  return serializeBlocks(doc.content ?? []);
+  const blocks = doc.content ?? [];
+  const last = blocks[blocks.length - 1];
+  const trailing = last?.type === 'paragraph' && !last.content?.length && endsWithAtom(blocks.slice(0, -1));
+  return serializeBlocks(trailing ? blocks.slice(0, -1) : blocks);
 }
 
 function serializeBlocks(blocks: Node[]): string {
@@ -240,6 +286,16 @@ function serializeBlock(n: Node): string {
     }
     case 'horizontalRule':
       return '---';
+    case 'noteImage': {
+      const src = String(n.attrs?.src ?? '');
+      const alt = String(n.attrs?.alt ?? '').replace(/[\\[\]\n]/g, (c) => (c === '\n' ? ' ' : `\\${c}`));
+      const width = typeof n.attrs?.width === 'string' && WIDTHS.includes(n.attrs.width) ? ` "width=${n.attrs.width}"` : '';
+      return `![${alt}](${/[\s()]/.test(src) ? `<${src}>` : src}${width})`;
+    }
+    case 'noteChart': {
+      const source = String(n.attrs?.source ?? '').replace(/^\s*```\s*$/gm, '');
+      return `\`\`\`chart\n${source}\n\`\`\``;
+    }
     default:
       return escapeLineStart(serializeInline(n.content));
   }
@@ -263,7 +319,7 @@ function serializeItem(marker: string, item: Node): string {
 function escapeLineStart(line: string): string {
   const pad = line.match(/^\s*/)![0];
   const rest = line.slice(pad.length);
-  if (/^(#{1,6} |[-+] |>|```|~~~)/.test(rest) || HR.test(rest)) return `${pad}\\${rest}`;
+  if (/^(#{1,6} |[-+] |>|```|~~~)/.test(rest) || HR.test(rest) || imageLine(rest)) return `${pad}\\${rest}`;
   const num = rest.match(/^(\d{1,9})([.)] .*)$/);
   if (num) return `${pad}${num[1]}\\${num[2]}`;
   return line;

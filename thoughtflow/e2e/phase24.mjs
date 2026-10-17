@@ -54,12 +54,6 @@ try {
   assert(find(items, 'Claude 데스크톱이 설치')?.status === 'ok', 'check: finds Claude Desktop');
   assert(find(items, '옛 버전(0.5.0)')?.status === 'warn', 'check: spots an outdated ThoughtFlow extension');
   assert(find(items, 'Claude 로그')?.text.includes('Server disconnected'), "check: shows Claude's recent ThoughtFlow log errors");
-  const report = await win.evaluate(() => navigator.clipboard?.readText?.().catch(() => '') ?? '');
-  void report;
-  assert(
-    (await win.evaluate(() => window.__tf.getState().aiActivity)) === null || true,
-    'self-test does not touch the board',
-  );
   const state = await win.evaluate(() => window.thoughtflow.aiGetState());
   assert(state.claude.lastUsed === null, 'self-test is not counted as Claude using the board');
 
@@ -138,6 +132,9 @@ try {
   await win.click('[data-testid=ai-url-changed] .ai-link');
   assert(!(await win.isVisible('[data-testid=ai-url-changed]')), 'the notice goes away once confirmed');
   assert(await win.isVisible('[data-testid=ai-open-chatgpt]'), 'shows the ChatGPT Plugins steps');
+  // 복사해서 보내는 점검 결과에는 비밀 주소·토큰이 없다
+  const diag = await win.evaluate(() => window.thoughtflow.aiDiagnose());
+  assert(diag.report.includes('바깥에서') && !diag.report.includes(secret) && !diag.report.includes('2abcDEF_good'), 'the copyable report hides the secret path and the token');
 
   // 다시 실행해도 같은 주소, 알림 없음
   await shutdown(app);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { docToMarkdown, markdownToDoc, parseInline } from '../src/editor/markdown';
+import { docToMarkdown, markdownToDoc, noteImagePaths, parseInline } from '../src/editor/markdown';
 
 const roundTrip = (md: string) => docToMarkdown(markdownToDoc(md));
 const text = (t: string, ...marks: string[]) => (marks.length ? { type: 'text', text: t, marks: marks.map((type) => ({ type })) } : { type: 'text', text: t });
@@ -209,5 +209,67 @@ describe('어떤 글이든 한 번 읽고 쓰면 그 뒤로는 바뀌지 않는�
       const once = roundTrip(md);
       expect(roundTrip(once), JSON.stringify(md)).toBe(once);
     }
+  });
+});
+
+describe('note images and charts', () => {
+  it('reads and writes an image line', () => {
+    const md = '위\n![그래프 화면](assets/a1b2c3d4-graph.png)\n아래';
+    const doc = markdownToDoc(md);
+    expect(doc.content?.[1]).toEqual({ type: 'noteImage', attrs: { src: 'assets/a1b2c3d4-graph.png', alt: '그래프 화면', width: null } });
+    expect(docToMarkdown(doc)).toBe(md);
+  });
+
+  it('keeps the size and file names with spaces', () => {
+    const md = '![사진 [1]](<assets/a1b2c3d4-검색 정확도 비교.png> "width=50%")';
+    const doc = markdownToDoc(md);
+    expect(doc.content?.[0].attrs).toEqual({ src: 'assets/a1b2c3d4-검색 정확도 비교.png', alt: '사진 [1]', width: '50%' });
+    expect(docToMarkdown(markdownToDoc(docToMarkdown(doc)))).toBe(docToMarkdown(doc));
+    expect(markdownToDoc(docToMarkdown(doc)).content?.[0].attrs?.alt).toBe('사진 [1]');
+  });
+
+  it('only local asset files become pictures', () => {
+    for (const md of ['![x](https://example.com/a.png)', '![x](assets/../secret.png)', '![x](C:/a.png)', '글 ![x](assets/a.png)']) {
+      expect(markdownToDoc(md).content?.[0].type).toBe('paragraph');
+    }
+  });
+
+  it('a paragraph that only looks like an image stays text', () => {
+    const doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '![x](assets/a.png)' }] }] };
+    const md = docToMarkdown(doc);
+    expect(md).toBe('\\![x](assets/a.png)');
+    expect(markdownToDoc(md)).toEqual(doc);
+  });
+
+  it('reads and writes a chart block (inside lists too)', () => {
+    const md = '```chart\ntype: bar\ntitle: 정확도\n크기, 정확도\n256, 71\n512, 78\n```';
+    const doc = markdownToDoc(md);
+    expect(doc.content?.[0]).toEqual({ type: 'noteChart', attrs: { source: 'type: bar\ntitle: 정확도\n크기, 정확도\n256, 71\n512, 78' } });
+    expect(docToMarkdown(doc)).toBe(md);
+    const nested = `- 결과\n  ${md.split('\n').join('\n  ')}`;
+    expect(docToMarkdown(markdownToDoc(nested))).toBe(nested);
+    // 다른 코드 블록은 그대로
+    expect(markdownToDoc('```js\nx\n```').content?.[0].type).toBe('codeBlock');
+  });
+
+  it('keeps an empty line after a final picture or chart only inside the editor', () => {
+    const md = '글\n![a](assets/1-a.png)';
+    const doc = markdownToDoc(md);
+    expect(doc.content?.map((n) => n.type)).toEqual(['paragraph', 'noteImage', 'paragraph']);
+    expect(docToMarkdown(doc)).toBe(md);
+    // 그 빈 줄에 쓴 글은 저장된다
+    doc.content![2] = { type: 'paragraph', content: [{ type: 'text', text: '이어서' }] };
+    expect(docToMarkdown(doc)).toBe(`${md}\n이어서`);
+    // 그림·그래프 뒤가 아니면 빈 줄도 그대로
+    expect(docToMarkdown(markdownToDoc('글\n'))).toBe('글\n');
+    expect(markdownToDoc('```chart\na, 1\n```').content?.map((n) => n.type)).toEqual(['noteChart', 'paragraph']);
+  });
+
+  it('finds every picture a note uses', () => {
+    expect(noteImagePaths('![a](assets/1-a.png)\n- ![b](<assets/2-b c.png>)\n> ![c](assets/3-c.png)\n![d](https://x/d.png)')).toEqual([
+      'assets/1-a.png',
+      'assets/2-b c.png',
+      'assets/3-c.png',
+    ]);
   });
 });

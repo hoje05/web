@@ -23,6 +23,17 @@ How to use it well:
   - Routes point forward in time or causality (cause → effect, idea → action → outcome).
 - Use update_box (append_note) to add details to an existing box, connect_boxes to link related boxes, and focus_box to show the user the box you are talking about.
 - Notes are shown in a Notion-like editor and stored as simple Markdown where one line is one block: "# " / "## " / "### " headings, "- " bullets, "1. " numbered items, "- [ ] " to-dos ("- [x] " done), "> " quotes, "---" divider, **bold**, *italic*, ~~strike~~, \`code\`. Indent a list line by 2 spaces to nest it. Do not leave blank lines between items of one list. Use to-dos for next actions the user decided on.
+- Charts: to show numbers in a note (results, comparisons, trends, shares), put a chart block on its own lines — ThoughtFlow draws it as a real chart:
+  \`\`\`chart
+  type: bar            (bar = compare items, default · line = change over time · pie = share of a whole, up to 6 parts)
+  title: 청크 크기별 정확도
+  unit: %
+  크기, 정확도, 속도     (first row = column names: first column = item labels, the others = series, up to 8)
+  256, 71, 120
+  512, 78, 140
+  \`\`\`
+  Use plain numbers (no thousands separators unless the cell is quoted). Prefer append_note to add a chart below the user's writing.
+- Pictures in notes appear as lines like ![설명](assets/…png). Keep these lines exactly as they are when you rewrite a note; you cannot add new pictures yourself (the user adds them in the app).
 - Never delete or rewrite the user's own content unless they ask. Deleting only works if the user allowed it in ThoughtFlow's AI settings.
 - After changing the board, briefly tell the user what you added or changed. The user can undo any change with Ctrl+Z in ThoughtFlow.`;
 
@@ -34,7 +45,7 @@ const flowBoxes = z
     z.object({
       key: z.string().optional().describe('Name for this new box, used only inside this call to refer to it in routes'),
       title: z.string().min(1).describe("Short text shown on the box (about 5–40 characters, in the user's language)"),
-      note: z.string().optional().describe('Longer details, reasons or quotes shown in the side panel (Markdown: - bullets, - [ ] to-dos, **bold** …)'),
+      note: z.string().optional().describe('Longer details, reasons or quotes shown in the side panel (Markdown: - bullets, - [ ] to-dos, **bold**, ```chart blocks for numbers …)'),
     }),
   )
   .max(60);
@@ -119,7 +130,10 @@ Example: {"after":"n_abc","boxes":[{"key":"q","title":"예산이 문제"},{"key"
         id: boxRef('The box to change'),
         title: z.string().optional().describe('New title'),
         note: z.string().optional().describe('Replaces the whole note — only when the user asked to rewrite it'),
-        append_note: z.string().optional().describe('Markdown appended to the end of the note as new lines (e.g. "- [ ] 새로 정한 할 일")'),
+        append_note: z
+          .string()
+          .optional()
+          .describe('Markdown appended to the end of the note as new lines (e.g. "- [ ] 새로 정한 할 일", or a ```chart block to draw numbers as a chart)'),
       },
       annotations: { ...additive, idempotentHint: false },
     },

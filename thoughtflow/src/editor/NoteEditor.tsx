@@ -3,6 +3,7 @@ import { Fragment, Slice, type ResolvedPos, type Schema } from '@tiptap/pm/model
 import { Selection } from '@tiptap/pm/state';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import type { NoteHost } from './blocks';
 import { findMatches, noteExtensions, searchKey, type SlashView } from './extensions';
 import { docToMarkdown, markdownToDoc } from './markdown';
 
@@ -18,6 +19,8 @@ interface Props {
   onChange: (note: string) => void;
   onFocus: () => void;
   onBlur: () => void;
+  /** 그림 넣기·크게 보기 등 메모 칸 밖의 기능 */
+  host?: Omit<NoteHost, 'onFocus' | 'onBlur'>;
 }
 
 /**
@@ -34,6 +37,23 @@ export const NoteEditor = forwardRef<NoteEditorHandle, Props>(function NoteEdito
   const [slash, setSlash] = useState<SlashView | null>(null);
   const extensions = useMemo(() => noteExtensions({ onSlash: setSlash }), []);
 
+  /** 그림은 자료 폴더로 복사해 pos 자리에, 그 밖의 파일은 Box의 첨부로 */
+  const insertFiles = async (pos: number, files: File[]) => {
+    const host = latest.current.host;
+    if (!host) return;
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    const others = files.filter((f) => !f.type.startsWith('image/'));
+    if (others.length) host.attachFiles(others);
+    const added = images.length ? await host.importImages(images) : [];
+    const ed = editorRef.current;
+    if (!added.length || !ed || ed.isDestroyed) return;
+    ed.chain()
+      .focus()
+      .insertContentAt(Math.min(pos, ed.state.doc.content.size), added.map((attrs) => ({ type: 'noteImage', attrs: { ...attrs, width: null } })))
+      .run();
+  };
+  const editorRef = useRef<Editor | null>(null);
+
   const editor = useEditor(
     {
       extensions,
@@ -42,6 +62,22 @@ export const NoteEditor = forwardRef<NoteEditorHandle, Props>(function NoteEdito
         attributes: { class: 'note-editor', 'data-testid': 'panel-note', spellcheck: 'false' },
         clipboardTextParser: (text, $context, plain, view) => pasteSlice(text, $context, plain, view.state.schema),
         clipboardTextSerializer: (slice) => copyText(slice),
+        // 그림을 붙여 넣거나 끌어다 놓으면 메모의 그 자리에 (그림이 아닌 파일은 Box의 첨부로)
+        handlePaste: (view, event) => {
+          const images = [...(event.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+          if (!images.length) return false;
+          event.preventDefault();
+          void insertFiles(view.state.selection.from, images);
+          return true;
+        },
+        handleDrop: (view, event, _slice, moved) => {
+          const files = [...(event.dataTransfer?.files ?? [])];
+          if (moved || !files.length) return false;
+          event.preventDefault();
+          const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          void insertFiles(at?.pos ?? view.state.selection.from, files);
+          return true;
+        },
       },
       onUpdate: ({ editor }) => {
         const md = docToMarkdown(editor.getJSON());
@@ -54,6 +90,21 @@ export const NoteEditor = forwardRef<NoteEditorHandle, Props>(function NoteEdito
     },
     [],
   );
+
+  // 메모 칸 밖의 기능을 그림·그래프 블록이 쓸 수 있게
+  useEffect(() => {
+    editorRef.current = editor;
+    if (!editor) return;
+    const storage = editor.storage as unknown as { noteHost: { host: NoteHost } };
+    storage.noteHost.host = {
+      pickImages: () => latest.current.host?.pickImages() ?? Promise.resolve([]),
+      importImages: (files) => latest.current.host?.importImages(files) ?? Promise.resolve([]),
+      attachFiles: (files) => latest.current.host?.attachFiles(files),
+      openImage: (src, alt) => latest.current.host?.openImage(src, alt),
+      onFocus: () => latest.current.onFocus(),
+      onBlur: () => latest.current.onBlur(),
+    };
+  }, [editor]);
 
   // 바깥에서 바뀐 메모 (Undo, AI가 고침) → 편집기에 다시 싣는다 (편집기의 되돌리기 기록에는 넣지 않음)
   useEffect(() => {

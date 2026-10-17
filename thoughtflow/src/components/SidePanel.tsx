@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type React from 'react';
 import { NoteEditor, type NoteEditorHandle } from '../editor/NoteEditor';
-import { attachFiles, filesOf, hasFiles } from '../persistence/attachments';
+import { attachFiles, filesOf, hasFiles, importNoteImages } from '../persistence/attachments';
 import { BoxProps } from './BoxProps';
 import { incomingEdges, outgoingEdges } from '../model/graph';
 import type { BoxNode, Doc } from '../model/types';
@@ -241,15 +241,17 @@ function PageEditor({ node, query }: { node: BoxNode; query: string }) {
       }}
       onDropCapture={(e) => {
         if (!hasFiles(e.dataTransfer)) return;
+        setDropping(false);
+        // 메모 칸 위에 놓으면 메모 편집기가 받는다 (그림은 메모 안에, 다른 파일은 첨부로)
+        if ((e.target as HTMLElement).closest?.('.note-editor')) return;
         e.preventDefault();
         e.stopPropagation();
-        setDropping(false);
         void attachFiles(node.id, filesOf(e.dataTransfer));
       }}
-      // 이미지를 붙여 넣으면(Ctrl+V) 이 Box에 첨부. 글자 붙여 넣기는 그대로.
+      // 이미지를 붙여 넣으면(Ctrl+V) 이 Box에 첨부 (메모 칸에서는 메모 안에 그림으로). 글자 붙여 넣기는 그대로.
       onPasteCapture={(e) => {
         const images = filesOf(e.clipboardData, true);
-        if (!images.length) return;
+        if (!images.length || (e.target as HTMLElement).closest?.('.note-editor')) return;
         e.preventDefault();
         e.stopPropagation();
         void attachFiles(node.id, images);
@@ -308,6 +310,12 @@ function PageEditor({ node, query }: { node: BoxNode; query: string }) {
         onChange={(note) => {
           session.touch();
           useStore.getState().setNoteLive(node.id, note);
+        }}
+        host={{
+          pickImages: () => importNoteImages(),
+          importImages: (files) => importNoteImages(files),
+          attachFiles: (files) => void attachFiles(node.id, files),
+          openImage: (src, alt) => useStore.getState().setPreview({ nodeId: node.id, image: { src, alt } }),
         }}
       />
     </div>

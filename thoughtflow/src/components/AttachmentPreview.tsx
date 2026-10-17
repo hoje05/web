@@ -1,8 +1,29 @@
 import { useEffect, useState } from 'react';
 import type { Attachment } from '../model/types';
 import { assetUrl, formatSize, isTextAttachment, openAttachment, readAttachmentText, revealAttachment } from '../persistence/attachments';
+import { imageLine } from '../editor/markdown';
 import { useStore } from '../store/store';
 import { FileIcon } from './BoxProps';
+
+/** 메모 안 그림 → 미리보기에서 쓰는 첨부 모양 */
+const noteImageAtt = (src: string, alt: string): Attachment => ({
+  id: `note:${src}`,
+  type: 'image',
+  name: alt || src.replace(/^assets\/[0-9a-f]{8}-/, ''),
+  relativePath: src,
+  mimeType: 'image',
+  size: 0,
+});
+
+/** 메모에 들어 있는 그림들 (순서대로) */
+function noteImages(note: string): Attachment[] {
+  const out: Attachment[] = [];
+  for (const line of note.split('\n')) {
+    const img = imageLine(line.trimStart().replace(/^(?:[-*+]|\d{1,9}[.)]) /, '').replace(/^>\s?/, ''));
+    if (img && !out.some((a) => a.relativePath === img.src)) out.push(noteImageAtt(img.src, img.alt));
+  }
+  return out;
+}
 
 /**
  * 첨부 미리보기 (창 안에서):
@@ -14,15 +35,21 @@ export function AttachmentPreview() {
   const preview = useStore((s) => s.preview);
   const node = useStore((s) => (s.preview ? s.doc.nodes[s.preview.nodeId] : undefined));
   const filePath = useStore((s) => s.filePath);
-  const att = node?.attachments?.find((a) => a.id === preview?.attachmentId);
+  const noteImage = preview && 'image' in preview ? preview.image : null;
+  const att = noteImage
+    ? noteImageAtt(noteImage.src, noteImage.alt)
+    : node?.attachments?.find((a) => preview && 'attachmentId' in preview && a.id === preview.attachmentId);
   const close = () => useStore.getState().setPreview(null);
 
-  const images = (node?.attachments ?? []).filter((a) => a.type === 'image');
-  const at = att ? images.findIndex((a) => a.id === att.id) : -1;
+  // ← → 로 넘겨 볼 그림들: 첨부 그림끼리, 메모 안 그림끼리
+  const images = noteImage ? noteImages(node?.note ?? '') : (node?.attachments ?? []).filter((a) => a.type === 'image');
+  const at = att ? images.findIndex((a) => a.relativePath === att.relativePath) : -1;
   const go = (d: number) => {
     if (at < 0 || images.length < 2 || !node) return;
     const next = images[(at + d + images.length) % images.length];
-    useStore.getState().setPreview({ nodeId: node.id, attachmentId: next.id });
+    useStore
+      .getState()
+      .setPreview(noteImage ? { nodeId: node.id, image: { src: next.relativePath, alt: next.name } } : { nodeId: node.id, attachmentId: next.id });
   };
 
   useEffect(() => {
@@ -56,7 +83,7 @@ export function AttachmentPreview() {
             {att.name}
           </span>
           <span className="preview-meta">
-            {formatSize(att.size)}
+            {noteImage ? '메모 안의 그림' : formatSize(att.size)}
             {att.width && att.height ? ` · ${att.width}×${att.height}` : ''}
             {images.length > 1 && at >= 0 ? ` · ${at + 1}/${images.length}` : ''}
           </span>

@@ -542,11 +542,15 @@ async function diagnose(): Promise<Diagnosis> {
   }
 
   const mark = { ok: '✓', warn: '⚠', error: '✗', info: '·' } as const;
-  const report = [
-    `ThoughtFlow ${app.getVersion()} 연결 점검 — ${new Date().toLocaleString('ko-KR')}`,
-    `${process.platform} ${process.arch}`,
-    ...items.map((i) => `${mark[i.status]} ${i.title}${i.detail ? `\n    ${i.detail.replace(/\n/g, '\n    ')}` : ''}`),
-  ].join('\n');
+  // 복사해서 남에게 보내는 글이므로 비밀 주소·토큰은 가린다
+  const hide = (t: string) => [secret, bridgeToken, ngrokToken ?? ''].reduce<string>((acc, k) => (k ? acc.split(k).join('••••') : acc), t);
+  const report = hide(
+    [
+      `ThoughtFlow ${app.getVersion()} 연결 점검 — ${new Date().toLocaleString('ko-KR')}`,
+      `${process.platform} ${process.arch}`,
+      ...items.map((i) => `${mark[i.status]} ${i.title}${i.detail ? `\n    ${i.detail.replace(/\n/g, '\n    ')}` : ''}`),
+    ].join('\n'),
+  );
   return {
     items,
     report,
