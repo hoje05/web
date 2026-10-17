@@ -130,6 +130,7 @@ try {
   assert(!JSON.stringify(stored).includes('2abcDEF_good') || stored.ngrokToken?.plain === '2abcDEF_good', 'the token is encrypted when the OS allows it (never the pasted command)');
   assert(await win.isVisible('[data-testid=ai-url-changed]'), 'switching from the temporary to the fixed address says the address changed');
   await win.click('[data-testid=ai-url-changed] .ai-link');
+  await win.waitForSelector('[data-testid=ai-url-changed]', { state: 'detached', timeout: 5000 }).catch(() => undefined);
   assert(!(await win.isVisible('[data-testid=ai-url-changed]')), 'the notice goes away once confirmed');
   assert(await win.isVisible('[data-testid=ai-open-chatgpt]'), 'shows the ChatGPT Plugins steps');
   // 복사해서 보내는 점검 결과에는 비밀 주소·토큰이 없다

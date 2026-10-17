@@ -176,7 +176,8 @@ try {
     dt.setData('text/plain', '- 붙인 하나\n- [ ] 붙인 할 일');
     document.querySelector('[data-testid=panel-note]').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
   });
-  assert((await note()).endsWith('~~취소~~\n- 붙인 하나\n- [ ] 붙인 할 일'), 'pasted Markdown becomes a list and a to-do');
+  const pasted = await note();
+  assert(pasted.endsWith('~~취소~~\n- 붙인 하나\n- [ ] 붙인 할 일'), `pasted Markdown becomes a list and a to-do (${JSON.stringify(pasted.slice(-60))})`);
   await win.keyboard.press('Control+a');
   const copied = await win.evaluate(() => {
     const el = document.querySelector('[data-testid=panel-note]');
