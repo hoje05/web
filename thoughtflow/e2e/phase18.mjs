@@ -77,7 +77,7 @@ try {
   await toEnd();
   await win.keyboard.type('/');
   await win.waitForSelector('[data-testid=slash-menu]');
-  assert((await count('[data-testid=slash-item]')) === 10, '"/" opens the block menu (10 kinds)');
+  assert((await count('[data-testid=slash-item]')) === 12, '"/" opens the block menu (12 kinds, with picture and chart)');
   await win.screenshot({ path: 'e2e/out/phase18-slash.png' });
   await win.keyboard.type('할');
   const filtered = await win.$$eval('[data-testid=slash-item]', (els) => els.map((e) => e.querySelector('.slash-label').textContent));
