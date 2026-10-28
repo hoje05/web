@@ -62,6 +62,12 @@ jobs:
       - name: 설치 파일 만들기
         run: npx electron-builder --win --publish never
 
+      - name: 시작 속도 재기 (참고용, 설치 파일과 같은 앱)
+        continue-on-error: true
+        env:
+          THOUGHTFLOW_EXE: release/win-unpacked/ThoughtFlow.exe
+        run: node e2e/perf-startup.mjs 6 300
+
       - name: 설치 파일 보관
         uses: actions/upload-artifact@v4
         with:
