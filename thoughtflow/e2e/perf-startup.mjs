@@ -1,5 +1,6 @@
-// 시작 속도 재기 (검사용 도구, run-all에는 없음): 프로젝트 여러 개 + 큰 보드(메모·그래프, 오른쪽 창 열림)를 마지막 파일로 두고
-// 실행 → 창이 보일 때 → 보드가 그려질 때까지의 시간을 여러 번 잰다. 첫 번째는 "처음 실행"(캐시 없음)이다.
+// 시작 속도 재기 (run-all에는 없음): 프로젝트 여러 개 + 큰 보드(메모·그래프, 오른쪽 창 열림)를 마지막 파일로 두고
+// 실행 → 창이 보일 때 → 보드가 그려질 때 → 메모 편집기가 뜰 때까지의 시간을 여러 번 잰다. 첫 번째는 "처음 실행"(캐시 없음)이다.
+// 마지막에는 연결 점검의 자체 시험(Claude가 쓰는 연결 프로그램 실행)도 해 본다 — 설치 파일과 같은 앱이 제대로 도는지 확인.
 //   node e2e/perf-startup.mjs [횟수=5] [Box 수=300]
 //   THOUGHTFLOW_EXE=release/win-unpacked/ThoughtFlow.exe node e2e/perf-startup.mjs   ← 설치 파일과 같은 앱으로
 import { _electron as electron } from 'playwright-core';
@@ -89,6 +90,9 @@ for (let r = 0; r < runs; r++) {
     return s && s.filePath && Object.keys(s.doc.nodes).length === n && document.querySelectorAll('[data-testid=box]').length > 0;
   }, boxes, { timeout: 60000, polling: 16 });
   const tBoard = Date.now() - t0;
+  // 오른쪽 창이 열린 채로 저장된 보드 → 메모 편집기(따로 불러오는 부분)도 떠야 한다
+  await win.waitForSelector('[data-testid=panel-note]', { timeout: 30000 });
+  const tEditor = Date.now() - t0;
   const nav = await win.evaluate(() => {
     const e = performance.getEntriesByType('navigation')[0];
     const marks = Object.fromEntries(performance.getEntriesByType('mark').filter((m) => m.name.startsWith('tf:')).map((m) => [m.name.slice(3), Math.round(m.startTime)]));
@@ -96,15 +100,21 @@ for (let r = 0; r < runs; r++) {
   });
   // 주 프로세스의 단계별 시각 (있으면)
   const main = await app.evaluate(() => globalThis.__tfStartup ?? null);
-  results.push({ tWindow, tShown, tBoard, dcl: nav.dcl });
+  results.push({ tWindow, tShown, tBoard, tEditor, dcl: nav.dcl });
   console.log(
-    `run ${r + 1}${r === 0 ? ' (처음)' : ''}: window ${tWindow}ms · shown ${tShown}ms · board drawn ${tBoard}ms` +
+    `run ${r + 1}${r === 0 ? ' (처음)' : ''}: window ${tWindow}ms · shown ${tShown}ms · board drawn ${tBoard}ms · editor ${tEditor}ms` +
       ` | renderer: DOMContentLoaded ${nav.dcl}ms, board ${nav.now}ms ${JSON.stringify(nav.marks)}` +
       (main ? ` | main: ${JSON.stringify(main)}` : ''),
   );
+  if (r === runs - 1) {
+    const diag = await win.evaluate(() => window.thoughtflow.aiDiagnose());
+    const self = diag.items.find((i) => i.title.includes('연결 프로그램'));
+    console.log(`연결 점검 자체 시험: ${self?.status} ${self?.title}${self?.detail ? ` (${self.detail})` : ''}`);
+    if (self?.status !== 'ok') process.exitCode = 1;
+  }
   await app.close();
 }
 const warm = results.slice(1);
 const med = (k) => warm.map((x) => x[k]).sort((a, b) => a - b)[Math.floor(warm.length / 2)];
-console.log(`처음 실행: shown ${results[0].tShown}ms · board ${results[0].tBoard}ms`);
-console.log(`다시 실행(중앙값): shown ${med('tShown')}ms · board ${med('tBoard')}ms · renderer DOMContentLoaded ${med('dcl')}ms`);
+console.log(`처음 실행: shown ${results[0].tShown}ms · board ${results[0].tBoard}ms · editor ${results[0].tEditor}ms`);
+console.log(`다시 실행(중앙값): shown ${med('tShown')}ms · board ${med('tBoard')}ms · editor ${med('tEditor')}ms · renderer DOMContentLoaded ${med('dcl')}ms`);

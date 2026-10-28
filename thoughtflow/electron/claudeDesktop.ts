@@ -9,12 +9,11 @@
  * 경로는 Claude 데스크톱의 기본 위치를 따른다 (Windows: %APPDATA%\Claude, Microsoft Store판은 %LOCALAPPDATA%\Packages\Claude_…).
  * 테스트용: THOUGHTFLOW_CLAUDE_DIR = Claude 설정 폴더
  */
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { app } from 'electron';
 import { existsSync, readdirSync, promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { mcpRuntime } from './mcpLoader';
 
 export const SERVER_KEY = 'thoughtflow';
 const CONFIG = 'claude_desktop_config.json';
@@ -238,6 +237,7 @@ export async function unregisterFromClaude(): Promise<{ ok: true; removed: numbe
 export async function selfTest(scriptPath: string, bridgeFile: string): Promise<{ ok: true; tools: number; ms: number } | { ok: false; error: string }> {
   if (!existsSync(scriptPath)) return { ok: false, error: `Claude용 연결 프로그램이 앱에 없습니다: ${scriptPath}` };
   const t0 = Date.now();
+  const { Client, StdioClientTransport } = mcpRuntime();
   const client = new Client({ name: 'thoughtflow-self-test', version: app.getVersion() });
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (typeof v === 'string') env[k] = v;

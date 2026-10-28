@@ -12,6 +12,7 @@ import { TagManager } from './components/TagManager';
 import { TitleBar } from './components/TitleBar';
 import { Toolbar } from './components/Toolbar';
 import { ZoomControls } from './components/ZoomControls';
+import { loadNoteEditor } from './editor/LazyNoteEditor';
 import { runCommand } from './interaction/commands';
 import { useKeyboard } from './interaction/useKeyboard';
 import { desktopApi, openPath, openStartupBoard, projectName, startAutosave } from './persistence/fileService';
@@ -37,7 +38,12 @@ export function App() {
     // Claude·ChatGPT의 요청 → 보드. 마지막 보드를 불러온 뒤부터 받는다.
     const api = desktopApi;
     const offAi = api.onAiRequest((req) => void handleAiRequest(req).then((res) => api.aiRespond(req.id, res)));
-    void openStartupBoard().finally(() => api.aiReady());
+    void openStartupBoard().finally(() => {
+      performance.mark('tf:board');
+      api.aiReady();
+      // 메모 편집기는 보드를 그린 뒤 한가할 때 미리 불러 둔다 (오른쪽 창을 처음 열 때 기다리지 않게)
+      requestIdleCallback(() => void loadNoteEditor(), { timeout: 1500 });
+    });
     return () => {
       stopAutosave();
       offMenu();

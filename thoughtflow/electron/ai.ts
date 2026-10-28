@@ -10,14 +10,12 @@
  *    ngrok(무료 계정 토큰, 계정의 고정 주소) — electron/tunnel.ts. 주소의 비밀 경로(128비트)를 아는 쪽만 쓸 수 있다.
  *  - 지우기 도구는 설정에서 허용했을 때만 통과시킨다.
  */
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { app, dialog, ipcMain, net, safeStorage, shell, type BrowserWindow, type WebContents } from 'electron';
 import { existsSync, promises as fs, writeFileSync } from 'fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http';
 import type { AddressInfo } from 'net';
 import * as path from 'path';
-import { createMcpServer } from '../mcp/server';
 import {
   AI_TOOL_NAMES,
   DEFAULT_AI_SETTINGS,
@@ -32,6 +30,7 @@ import {
   type TunnelProvider,
 } from '../src/ai/protocol';
 import { inspectClaude, registerInClaude, selfTest, unregisterFromClaude } from './claudeDesktop';
+import { mcpRuntime } from './mcpLoader';
 import { downloadTunnel, startTunnel, type TunnelHandle, type TunnelInfo } from './tunnel';
 
 /** settings.json의 "ai" */
@@ -308,6 +307,7 @@ async function handleChat(req: IncomingMessage, res: ServerResponse) {
     res.setHeader('allow', 'POST');
     return sendJson(res, 405, { jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed.' }, id: null });
   }
+  const { createMcpServer, StreamableHTTPServerTransport } = mcpRuntime();
   const server = createMcpServer((tool, args, client) => dispatch('chatgpt', tool, args, client), app.getVersion());
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on('close', () => {

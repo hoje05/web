@@ -1,5 +1,6 @@
 // Electron main/preload와 Claude 데스크톱 확장(.mcpb)을 빌드한다.
 //   dist-electron/main.js, preload.js      ← electron/*.ts (esbuild로 한 파일씩 묶음)
+//   dist-electron/mcp-runtime.js           ← MCP 부품 (처음 쓸 때 불러옴 — 시작을 가볍게)
 //   dist-mcp/bundle/                        ← 확장 내용 (manifest.json, icon.png, server/index.js)
 //   dist-mcp/ThoughtFlow.mcpb               ← Claude 데스크톱에서 여는 설치 파일
 // 사용: node scripts/build-electron.mjs [--no-mcpb]
@@ -20,6 +21,14 @@ const common = {
 
 await build({ ...common, entryPoints: ['electron/main.ts'], outfile: 'dist-electron/main.js', target: 'node20', external: ['electron'] });
 await build({ ...common, entryPoints: ['electron/preload.ts'], outfile: 'dist-electron/preload.js', target: 'node20', external: ['electron'] });
+await build({
+  ...common,
+  entryPoints: ['electron/mcpRuntime.ts'],
+  outfile: 'dist-electron/mcp-runtime.js',
+  target: 'node20',
+  external: ['electron'],
+  minify: true,
+});
 
 // ── Claude 데스크톱 확장 ──
 const out = 'dist-mcp/bundle';

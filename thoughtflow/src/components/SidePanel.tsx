@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type React from 'react';
-import { NoteEditor, type NoteEditorHandle } from '../editor/NoteEditor';
+import { LazyNoteEditor } from '../editor/LazyNoteEditor';
+import type { NoteEditorHandle } from '../editor/NoteEditor';
 import { attachFiles, filesOf, hasFiles, importNoteImages } from '../persistence/attachments';
 import { BoxProps } from './BoxProps';
 import { incomingEdges, outgoingEdges } from '../model/graph';
@@ -301,7 +302,7 @@ function PageEditor({ node, query }: { node: BoxNode; query: string }) {
           )}
         </div>
       )}
-      <NoteEditor
+      <LazyNoteEditor
         ref={noteRef}
         note={node.note}
         query={query}

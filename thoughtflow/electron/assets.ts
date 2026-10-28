@@ -7,7 +7,7 @@
  *    다음에 프로젝트를 열 때 어디에서도 쓰지 않는 파일만 정리한다.
  *  - 화면에서는 tfasset:// 주소로 이미지를 보여 준다 (허용된 프로젝트의 자료 폴더 안 파일만).
  */
-import { BrowserWindow, dialog, ipcMain, net, protocol, shell } from 'electron';
+import { BrowserWindow, dialog, ipcMain, net, protocol, shell, type CustomScheme } from 'electron';
 import { randomUUID } from 'crypto';
 import { constants as fsConstants, existsSync, promises as fs } from 'fs';
 import * as path from 'path';
@@ -15,12 +15,11 @@ import { pathToFileURL } from 'url';
 
 export const ASSET_SCHEME = 'tfasset';
 
-/** 창을 만들기 전에(app ready 전) 불러야 한다 */
-export function registerAssetScheme() {
-  protocol.registerSchemesAsPrivileged([
-    { scheme: ASSET_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-  ]);
-}
+/** app ready 전에 protocol.registerSchemesAsPrivileged로 등록한다 (main.ts에서 다른 주소 체계와 함께 한 번에) */
+export const assetScheme: CustomScheme = {
+  scheme: ASSET_SCHEME,
+  privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+};
 
 const IMAGE_TYPES: Record<string, string> = {
   '.png': 'image/png',

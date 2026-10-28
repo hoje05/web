@@ -1,18 +1,49 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, session, shell, type MenuItemConstructorOptions } from 'electron';
 import { existsSync, promises as fs } from 'fs';
 import * as path from 'path';
+import { pathToFileURL } from 'url';
 import { setupAi, shutdownAi, watchRenderer, type StoredAi } from './ai';
-import { copyAssetDir, registerAssetScheme, renameAssetDir, setupAssets, trashAssetDir } from './assets';
+import { assetScheme, copyAssetDir, renameAssetDir, setupAssets, trashAssetDir } from './assets';
 
 const FILE_FILTERS = [
   { name: 'ThoughtFlow Board', extensions: ['tflow'] },
   { name: 'JSON', extensions: ['json'] },
 ];
 
+/** 시작 단계별 시각(ms, 프로그램 시작부터) — 시작 속도를 잴 때 본다 (e2e/perf-startup.mjs) */
+const startupTimes: Record<string, number> = {};
+(globalThis as { __tfStartup?: Record<string, number> }).__tfStartup = startupTimes;
+const markStartup = (name: string) => {
+  startupTimes[name] ??= Math.round(performance.now());
+};
+
 // 테스트에서 사용자 데이터/보드 폴더를 분리하기 위한 환경 변수
 if (process.env.THOUGHTFLOW_USER_DATA) app.setPath('userData', process.env.THOUGHTFLOW_USER_DATA);
-// 첨부 이미지를 보여 주는 tfasset:// (창을 만들기 전에 등록)
-registerAssetScheme();
+
+/**
+ * 화면 파일(dist)은 file:// 대신 app://thoughtflow/ 로 연다.
+ * file://은 V8 코드 캐시가 되지 않아 실행할 때마다 화면 코드 전체를 처음부터 해석하지만,
+ * codeCache를 켠 주소 체계는 한 번 해석한 결과를 사용자 데이터 폴더에 두고 다음 실행부터 바로 쓴다.
+ */
+const APP_SCHEME = 'app';
+const APP_HOST = 'thoughtflow';
+const APP_ORIGIN = `${APP_SCHEME}://${APP_HOST}`;
+// 첨부 이미지를 보여 주는 tfasset://와 함께, 창을 만들기 전에 한 번에 등록한다
+protocol.registerSchemesAsPrivileged([
+  { scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, codeCache: true } },
+  assetScheme,
+]);
+
+/** app://thoughtflow/… → dist 폴더 안의 파일만 */
+function serveAppFiles() {
+  const root = path.join(__dirname, '../dist');
+  protocol.handle(APP_SCHEME, (req) => {
+    const url = new URL(req.url);
+    const abs = path.join(root, path.normalize(decodeURIComponent(url.pathname)));
+    if (url.host !== APP_HOST || !abs.startsWith(root + path.sep)) return new Response('not found', { status: 404 });
+    return net.fetch(pathToFileURL(abs).toString());
+  });
+}
 
 /**
  * 프로젝트(보드 파일) 폴더: 사용자 폴더/ThoughtFlow (예: C:\Users\이름\ThoughtFlow).
@@ -114,7 +145,8 @@ function createWindow() {
     title: 'ThoughtFlow',
     // 기본 제목 표시줄 대신 앱 위쪽의 프로그램 바(최소화/최대화/닫기)를 쓴다
     frame: false,
-    show: false,
+    // 화면이 다 그려지기를 기다리지 않고 바로 보인다 (검은 배경 → 프로그램 바 틀 → 보드). 눌렀는데 아무것도 안 뜨는 시간을 없앤다.
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -122,12 +154,15 @@ function createWindow() {
       sandbox: true,
       // Claude 창 뒤에 가려져 있어도 AI 요청 처리·자동 저장이 늦춰지지 않게
       backgroundThrottling: false,
+      // 맞춤법 검사 사전을 불러오거나(인터넷에서) 받지 않는다 — 한글 메모에는 쓰이지 않고 시작만 늦춘다
+      spellcheck: false,
     },
   });
 
   // 트랙패드 pinch로 페이지 전체가 확대되지 않게 막는다 (Board 자체 zoom만 사용).
   mainWindow.webContents.setVisualZoomLevelLimits(1, 1);
-  mainWindow.once('ready-to-show', () => mainWindow?.show());
+  mainWindow.once('ready-to-show', () => markStartup('painted'));
+  mainWindow.webContents.once('did-finish-load', () => markStartup('loaded'));
 
   // 외부 링크/새 창 열기 차단
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -160,7 +195,7 @@ function createWindow() {
   if (devUrl) {
     void mainWindow.loadURL(devUrl);
   } else {
-    void mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    void mainWindow.loadURL(`${APP_ORIGIN}/index.html`);
   }
 }
 
@@ -332,6 +367,39 @@ function migrateBoards(): Promise<void> {
   return migration;
 }
 
+/**
+ * 시작할 때 열 보드: 명령행 인자 → 마지막으로 쓰던 파일.
+ * 화면이 뜨기를 기다리지 않고 프로그램이 켜지자마자 읽기 시작해서, 화면이 요청할 때는 이미 준비되어 있게 한다.
+ * 읽지 못하면 다음에는 그 파일을 열려고 하지 않는다.
+ */
+type StartupBoard = { filePath: string; content: string } | null;
+let preparedBoard: Promise<StartupBoard> | null = null;
+function prepareStartupBoard(): Promise<StartupBoard> {
+  preparedBoard ??= (async () => {
+    let file = fileArgFromArgv(process.argv);
+    if (!file) {
+      await migrateBoards();
+      const { lastFile } = await readSettings();
+      file = lastFile && existsSync(lastFile) ? lastFile : null;
+    }
+    if (!file) return null;
+    const filePath = allow(file);
+    try {
+      return { filePath, content: await fs.readFile(filePath, 'utf-8') };
+    } catch {
+      await rememberFile(null);
+      return null;
+    }
+  })();
+  return preparedBoard;
+}
+/** 미리 읽어 둔 것은 한 번만 쓴다 (화면을 새로 고치면 그때 다시 읽는다) */
+function takeStartupBoard(): Promise<StartupBoard> {
+  const board = prepareStartupBoard();
+  preparedBoard = null;
+  return board;
+}
+
 const pad = (n: number) => String(n).padStart(2, '0');
 
 function registerIpc() {
@@ -430,14 +498,8 @@ function registerIpc() {
     closeRequestedAt = 0;
   });
 
-  /** 시작할 때 열 파일: 명령행 인자 → 마지막으로 쓰던 파일 */
-  ipcMain.handle('app:startup-file', async () => {
-    const arg = fileArgFromArgv(process.argv);
-    if (arg) return allow(arg);
-    await migrateBoards();
-    const { lastFile } = await readSettings();
-    return lastFile && existsSync(lastFile) ? allow(lastFile) : null;
-  });
+  /** 시작할 때 열 보드 (프로그램이 켜지자마자 미리 읽어 둔 것) */
+  ipcMain.handle('app:startup-board', () => takeStartupBoard());
 
   ipcMain.on('app:set-last-file', (_e, filePath: string | null) => {
     void rememberFile(filePath);
@@ -590,13 +652,18 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    markStartup('ready');
     // 검은색 테마: 메뉴, 대화상자, Windows 제목 표시줄도 어둡게
     nativeTheme.themeSource = 'dark';
-    void migrateBoards();
+    // 맞춤법 검사 사전을 인터넷에서 받지 않게 (창의 spellcheck: false와 함께)
+    session.defaultSession.setSpellCheckerEnabled(false);
+    void prepareStartupBoard();
+    serveAppFiles();
     registerIpc();
     setupAssets({ isAllowed: (p) => allowedPaths.has(path.resolve(p)), getWindow: () => mainWindow });
     buildMenu();
     createWindow();
+    markStartup('window');
     void setupAi({
       getWindow: () => mainWindow,
       readAi: async () => (await readSettings()).ai ?? {},

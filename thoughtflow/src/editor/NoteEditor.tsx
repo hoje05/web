@@ -11,7 +11,7 @@ export interface NoteEditorHandle {
   focus: (where: 'start' | 'end') => void;
 }
 
-interface Props {
+export interface NoteEditorProps {
   /** 메모 (Markdown) */
   note: string;
   /** Ctrl+F 검색어 — 메모 안에서 강조하고 첫 위치로 스크롤 */
@@ -28,7 +28,7 @@ interface Props {
  * "/" 메뉴, # · - · 1. · [] · > 같은 바로 입력, 글자를 고르면 서식 막대.
  * 내용은 Markdown 글자로 주고받는다 (파일·AI가 보는 메모 형식은 그대로 글).
  */
-export const NoteEditor = forwardRef<NoteEditorHandle, Props>(function NoteEditor(props, ref) {
+export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function NoteEditor(props, ref) {
   const latest = useRef(props);
   latest.current = props;
   /** 편집기가 마지막으로 내보낸(또는 받은) 메모 — 바깥에서 바뀐 것만 다시 읽기 위해 */

@@ -3,9 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <title>ThoughtFlow</title>
+    <style>
+      /* 화면 코드가 뜨기 전 잠깐 보이는 틀 (프로그램 바 자리) — 창이 바로 보이고 끌어서 옮길 수 있다. React가 그리면 바로 바뀐다. */
+      html, body { margin: 0; height: 100%; background: #0e0f11; }
+      .boot-bar { height: 38px; box-sizing: border-box; background: #0a0b0d; border-bottom: 1px solid #2a2c31; -webkit-app-region: drag; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="boot-bar"></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -333,6 +333,7 @@ ChatGPT와 웹·휴대폰의 Claude는 인터넷 주소(HTTPS)로만 앱에 연�
 
 ```
 electron/        main process (프레임 없는 창·창 조작, 메뉴, 파일/프로젝트 관리, 닫기 전 저장) + preload API
+                 화면은 app://thoughtflow/ 로 연다 (file://과 달리 V8 코드 캐시가 되어 두 번째 실행부터 빨리 뜸)
 src/model/       Box/Route/태그/첨부 데이터 모델과 순수 함수 연산 (tags.ts: 태그 만들기·재사용·보관·자동 완성)
 src/geometry/    벡터, 사각형, Chord 좌표계, Catmull-Rom → Bezier
 src/anchors/     연결 면 선택, Anchor Distribution
@@ -342,10 +343,12 @@ src/interaction/ hit test, pointer 상태 머신, 단축키, 명령
 src/persistence/ .tflow 파일 형식(검증·예전 버전 읽기 포함), 열기/저장/자동 저장, 첨부 가져오기·열기(attachments.ts)
 src/components/  Board, BoxView, RouteView, Toolbar, TitleBar(프로그램 바), ProjectDrawer(프로젝트 창), SidePanel(오른쪽 창·탭), BoxProps(태그·첨부 줄), AttachmentPreview(미리보기), TagManager(저장된 태그), SearchBar, SaveStatus, AiSettings(AI 연결 창), AiToast …
 src/editor/      메모 편집기(Tiptap): 블록·"/" 메뉴·서식 막대(NoteEditor, extensions), 메모 ↔ Markdown 변환(markdown)
+                 편집기는 따로 불러온다(LazyNoteEditor) — 보드를 먼저 그리고 편집기는 그 뒤에
 src/layout/      정렬: 층으로 나누는 배치(열·순서·세로 맞춤·건너뛰는 Route의 통로), → 나가는 흐름 / ← 들어오는 흐름 중심 — arrange.ts
 src/ai/          AI가 보드를 읽고 고치는 함수(boardOps), 자동 배치(layout), 요청 처리(aiBridge)
 mcp/             MCP 서버 정의(server.ts, 도구 목록) + Claude 데스크톱 확장 진입점(stdio.ts)
 electron/ai.ts   로컬 브리지(Claude), ChatGPT용 HTTPS 엔드포인트 + cloudflared 터널, AI 연결 설정
+electron/mcpRuntime.ts MCP 부품(zod·SDK) — dist-electron/mcp-runtime.js로 따로 빌드해 처음 쓸 때 불러옴 (시작을 가볍게)
 electron/assets.ts 첨부 파일: 프로젝트별 자료 폴더(이름.assets)로 복사, tfasset:// 로 이미지 보기, 열기·미리보기·정리
 ```
 
@@ -359,6 +362,9 @@ npm run e2e        # 실제 Electron 앱을 띄워 마우스/키보드로 조작
 ```
 
 Linux(화면 없는 환경)에서는 `xvfb-run -a npm run e2e`로 실행합니다.
+
+시작 속도는 `node e2e/perf-startup.mjs [횟수] [Box 수]`로 잽니다 (큰 보드를 마지막 파일로 두고 창 → 보드 → 메모 편집기까지).
+GitHub Actions는 만든 설치 파일과 같은 앱(`release/win-unpacked`)으로 이것을 돌려, 보드·편집기·Claude 연결 프로그램이 제대로 뜨는지 확인하고 시간을 기록합니다.
 GitHub에 push하면 [GitHub Actions](../.github/workflows/thoughtflow.yml)가 Windows에서 같은 테스트를 모두 돌리고 설치 파일을 만듭니다.
 
 ## 새 버전 배포하기 (Release)

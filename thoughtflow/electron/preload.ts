@@ -38,7 +38,7 @@ const api = {
   /** 안내에 나오는 사이트(ChatGPT·Claude·ngrok)만 기본 브라우저로 연다 */
   openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('app:open-external', url),
   confirm: (message: string): Promise<boolean> => ipcRenderer.invoke('app:confirm', message),
-  startupFile: (): Promise<string | null> => ipcRenderer.invoke('app:startup-file'),
+  startupBoard: (): Promise<{ filePath: string; content: string } | null> => ipcRenderer.invoke('app:startup-board'),
   setLastFile: (filePath: string | null) => ipcRenderer.send('app:set-last-file', filePath),
   closeNow: () => ipcRenderer.send('app:close-now'),
   closeCancelled: () => ipcRenderer.send('app:close-cancelled'),

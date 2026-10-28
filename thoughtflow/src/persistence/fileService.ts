@@ -24,7 +24,8 @@ type Api = {
   alert: (message: string) => Promise<void>;
   openExternal: (url: string) => Promise<boolean>;
   confirm: (message: string) => Promise<boolean>;
-  startupFile: () => Promise<string | null>;
+  /** 시작할 때 열 보드 (명령행 인자 또는 마지막으로 쓰던 파일, 이미 읽어 둔 내용) */
+  startupBoard: () => Promise<{ filePath: string; content: string } | null>;
   setLastFile: (filePath: string | null) => void;
   closeNow: () => void;
   closeCancelled: () => void;
@@ -296,13 +297,21 @@ export async function openPath(filePath: string, opts: { quiet?: boolean } = {})
   }
 }
 
+let startupRequest: ReturnType<Api['startupBoard']> | null = null;
+
+/** 시작할 보드를 가능한 한 일찍 요청해 둔다 (화면을 그리는 동안 받아 오도록) */
+export function requestStartupBoard() {
+  startupRequest ??= desktopApi?.startupBoard() ?? null;
+}
+
 /** 시작할 때: 명령행으로 받은 파일 또는 마지막으로 쓰던 보드를 연다 */
 export async function openStartupBoard() {
   if (!desktopApi) return;
-  const p = await desktopApi.startupFile();
-  if (!p) return;
+  requestStartupBoard();
+  const res = await startupRequest;
+  startupRequest = null;
+  if (!res) return;
   try {
-    const res = await desktopApi.readFile(p);
     loadContent(res.filePath, res.content);
   } catch {
     desktopApi.setLastFile(null);
