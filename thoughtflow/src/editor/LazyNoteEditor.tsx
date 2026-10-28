@@ -30,18 +30,17 @@ export const LazyNoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(func
     ref,
     () => ({
       focus: (where) => {
-        if (inner.current) inner.current.focus(where);
-        else pending.current = where;
+        if (inner.current?.focus(where)) return true;
+        pending.current = where;
+        return false;
       },
     }),
     [],
   );
+  // 편집기가 (새로) 준비될 때마다 불린다 — 기다리던 포커스가 있으면 이때 적용
   const attach = useCallback((h: NoteEditorHandle | null) => {
     inner.current = h;
-    if (h && pending.current) {
-      h.focus(pending.current);
-      pending.current = null;
-    }
+    if (h && pending.current && h.focus(pending.current)) pending.current = null;
   }, []);
 
   return (

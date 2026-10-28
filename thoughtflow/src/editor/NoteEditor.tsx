@@ -8,7 +8,8 @@ import { findMatches, noteExtensions, searchKey, type SlashView } from './extens
 import { docToMarkdown, markdownToDoc } from './markdown';
 
 export interface NoteEditorHandle {
-  focus: (where: 'start' | 'end') => void;
+  /** 메모 칸으로 커서 옮기기 (편집기가 아직 준비되지 않았으면 false) */
+  focus: (where: 'start' | 'end') => boolean;
 }
 
 export interface NoteEditorProps {
@@ -54,7 +55,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
   };
   const editorRef = useRef<Editor | null>(null);
 
-  const editor = useEditor(
+  const current = useEditor(
     {
       extensions,
       content: markdownToDoc(props.note),
@@ -90,11 +91,17 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
     },
     [],
   );
+  /**
+   * Tiptap은 만든 편집기가 곧바로(1ms 안에) 화면에 붙지 않으면 지우고 새로 만든다.
+   * 따로 불러온 편집기처럼 그리기와 화면에 붙이기 사이가 벌어지면 지워진 편집기가 잠깐 넘어오므로, 그때는 없는 것으로 본다.
+   * (새 편집기가 오면 아래 효과들이 다시 실행된다)
+   */
+  const editor = current && !current.isDestroyed ? current : null;
 
   // 메모 칸 밖의 기능을 그림·그래프 블록이 쓸 수 있게
   useEffect(() => {
     editorRef.current = editor;
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     const storage = editor.storage as unknown as { noteHost: { host: NoteHost } };
     storage.noteHost.host = {
       pickImages: () => latest.current.host?.pickImages() ?? Promise.resolve([]),
@@ -108,14 +115,14 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
 
   // 바깥에서 바뀐 메모 (Undo, AI가 고침) → 편집기에 다시 싣는다 (편집기의 되돌리기 기록에는 넣지 않음)
   useEffect(() => {
-    if (!editor || props.note === lastNote.current) return;
+    if (!editor || editor.isDestroyed || props.note === lastNote.current) return;
     lastNote.current = props.note;
     editor.chain().setMeta('addToHistory', false).setContent(markdownToDoc(props.note), { emitUpdate: false }).run();
   }, [editor, props.note]);
 
   // 검색어 강조 + 첫 위치로 스크롤
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     editor.view.dispatch(editor.state.tr.setMeta(searchKey, props.query));
     const first = findMatches(editor.state.doc, props.query)[0];
     const box = scrollRef.current;
@@ -128,11 +135,12 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
     ref,
     () => ({
       focus: (where) => {
-        if (!editor) return;
+        if (!editor || editor.isDestroyed) return false;
         const { state, view } = editor;
         view.focus();
         const sel = where === 'end' ? Selection.atEnd(state.doc) : Selection.atStart(state.doc);
         view.dispatch(state.tr.setSelection(sel).scrollIntoView());
+        return true;
       },
     }),
     [editor],
