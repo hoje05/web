@@ -6,6 +6,23 @@
 
 ---
 
+## 0. 핵심 원칙 — "내가 설계한 계획대로" 만들게 한다
+
+계획은 **사람이 쓰고**, Claude는 **그 계획을 그대로 실행하는 쪽**이다. 그래서 아래를 모든 기능의 기준으로 삼는다.
+
+| 원칙 | 어떻게 지키나 |
+|---|---|
+| **계획은 사람만 고친다** | Claude의 기본 권한은 "상태·결과 적기"뿐. 할 일·완료 기준·만들 것·도구·순서는 Claude가 바꿀 수 없다. 바꿔야 할 것 같으면 `propose_change`로 **제안만** 하고, 사용자가 앱에서 받아들여야 반영된다 |
+| **순서대로** | 앞 단계가 끝나지 않은 단계는 `start_step`이 거부한다. 한 번에 하나씩(기본). |
+| **정한 결과물을 만든다** | 단계마다 **만들 것**(파일 경로·형식·내용 조건)을 적는다. Claude는 그 목록에 맞춰 만들고, 끝낼 때 각 항목을 실제로 만든 위치와 함께 보고해야 한다 |
+| **정한 도구를 쓴다** | 끝낼 때 **실제로 쓴 스킬·명령어·커넥터·서브 에이전트**를 보고하게 하고, 앱이 지정한 것과 비교해 다르면 ⚠ 표시 |
+| **완료 기준을 하나씩 확인** | 완료 기준을 체크리스트로 적고, Claude는 항목마다 통과/실패와 근거를 보고. 하나라도 실패면 완료로 바꿀 수 없다 |
+| **사람이 확인하고 넘어간다** | 단계별로 "검토 후 다음으로"를 켜면 Claude가 끝내도 **검토 대기**가 되고, 사용자가 승인해야 다음 단계가 열린다 |
+| **모르면 묻는다** | 계획에 없는 결정이 필요하면 추측하지 말고 `ask_user`로 질문 → 앱에 질문이 뜨고, 답을 적으면 Claude가 이어서 진행 |
+| **기록이 남는다** | 실행할 때의 계획 버전, 단계별 시작·끝·사용 도구·결과물·질문과 답이 남아, 계획과 결과를 나란히 비교할 수 있다 |
+
+---
+
 ## 1. 기본 개념 — 지금 구조를 그대로 살린다
 
 | 지금 | 워크플로우에서 |
@@ -31,11 +48,17 @@
 ```ts
 /** Box가 계획 블록이면 있음 */
 interface StepInfo {
-  status: 'todo' | 'ready' | 'running' | 'waiting' | 'done' | 'failed' | 'skipped';
+  status: 'todo' | 'ready' | 'running' | 'waiting' | 'asking' | 'review' | 'done' | 'failed' | 'skipped';
   /** 이 단계에서 할 일 (Claude에게 주는 지시) — 길면 메모에 */
   goal: string;
-  /** 완료 기준 — Claude가 끝났다고 판단하는 조건 */
-  doneWhen: string;
+  /** 완료 기준 (체크리스트) — 하나씩 통과해야 완료 */
+  doneWhen: string[];
+  /** 만들 것 — 이 단계의 결과물 명세 (예: { path: "src/login.tsx", spec: "이메일·비밀번호 입력, 오류 문구 표시" }) */
+  deliverables: { path?: string; spec: string }[];
+  /** 꼭 읽고 따를 참고 자료 (첨부 id, 파일 경로, 링크, 다른 단계의 결과물) */
+  references: string[];
+  /** Claude가 끝내도 사람이 검토·승인해야 다음 단계가 열림 */
+  review: boolean;
   /** 누가 하는가 */
   assignee: 'claude' | 'human';
   /** 시작 전에 사람 승인이 필요한가 (위험한 단계: 배포, 메일 보내기 …) */
@@ -43,7 +66,16 @@ interface StepInfo {
   /** 쓸 도구 */
   resources: StepResources;
   /** 마지막 결과 요약 / 결과물 (파일 경로, 링크) */
-  result?: { summary: string; outputs: string[]; at: string; by: string };
+  result?: {
+    summary: string;
+    outputs: { deliverable: number; path: string }[];       // 만들 것 각 항목 → 실제 만든 위치
+    criteria: { item: number; pass: boolean; evidence: string }[]; // 완료 기준 각 항목의 확인 결과
+    used: StepResources;                                     // 실제로 쓴 도구 (지정한 것과 비교)
+    planVersion: string;                                     // 실행할 때의 계획 버전
+    at: string; by: string;
+  };
+  /** Claude의 질문과 사용자의 답 */
+  questions?: { at: string; question: string; answer?: string }[];
   /** 진행 기록 (상태가 바뀔 때마다 한 줄) */
   log: { at: string; by: string; status: StepInfo['status']; note?: string }[];
 }
@@ -68,7 +100,13 @@ interface WorkflowMeta {
   goal: string;                 // 계획 전체 목표
   workingDir?: string;          // Claude Code가 작업할 폴더/저장소 (선택)
   defaults: Partial<StepResources>; // 모든 단계에 기본으로 붙는 도구
-  stepPermission: 'read' | 'status' | 'full'; // AI가 할 수 있는 일 (아래 6장)
+  stepPermission: 'read' | 'status'; // AI가 할 수 있는 일 — 기본 'status'. 계획 고치기는 제안(propose_change)만
+  /** 계획 버전 — 사람이 계획을 고칠 때마다 바뀜 (실행 기록과 묶음) */
+  version: string;
+  /** 진행 중에는 계획 잠금 (실수로 바꾸지 않게, 풀면 버전이 올라감) */
+  locked: boolean;
+  /** 동시에 진행할 수 있는 단계 수 — 기본 1 */
+  parallel: number;
 }
 interface Doc { …; workflow?: WorkflowMeta }
 ```
@@ -120,8 +158,11 @@ interface Doc { …; workflow?: WorkflowMeta }
 
 ### 오른쪽 창 — 계획 블록 설정 (`StepProps.tsx`, BoxProps 아래)
 - **계획 블록으로 만들기** 스위치 → 켜면 아래가 나타남
-- 상태 칩 (할 일 / 진행 중 / 승인 대기 / 완료 / 실패 / 건너뜀) — 사람이 직접 바꿀 수도 있음
-- **할 일** (한 줄 지시), **완료 기준**
+- 상태 칩 (할 일 / 진행 중 / 승인 대기 / 질문 / 검토 대기 / 완료 / 실패 / 건너뜀) — 사람이 직접 바꿀 수도 있음
+- **할 일** (한 줄 지시, 자세한 설계는 메모에), **완료 기준** 체크리스트, **만들 것** 목록(경로 + 조건), **참고 자료**
+- **검토 후 다음으로** 스위치
+- 끝난 뒤: **계획 대비 결과** — 만들 것 ↔ 만든 위치, 완료 기준 ✓/✗와 근거, 지정 도구 ↔ 실제 쓴 도구 (다르면 ⚠)
+- Claude의 **질문**에 답하는 칸, **계획 수정 제안** 받아들이기/거절
 - **담당**: Claude / 사람, **시작 전 승인 필요** 스위치
 - **도구** — 태그처럼 칩 + 자동 완성 (`ResourcePicker.tsx`, TagInput을 재사용):
   `스킬 ＋` `명령어 ＋` `커넥터 ＋` / **서브 에이전트** 고르기 (종류, 모델, 따로 줄 지시)
@@ -160,14 +201,15 @@ interface Doc { …; workflow?: WorkflowMeta }
 | `next_steps` | 지금 시작할 수 있는 단계와 그 단계의 전체 지시 | 읽기 |
 | `start_step(id)` | 진행 중으로. 앞 단계가 안 끝났거나 승인이 필요하면 **거부하고 이유를 알려 줌** | status |
 | `request_approval(id, why)` | 승인 대기로 바꾸고 사용자에게 알림 (작업 표시줄 깜빡임) | status |
-| `finish_step(id, summary, outputs[])` | 완료 + 결과 기록 + 진행 기록 한 줄 | status |
+| `finish_step(id, summary, outputs[], criteria[], used)` | 결과물·완료 기준 확인·쓴 도구를 함께 보고. 만들 것이 빠졌거나 기준이 하나라도 실패면 **거부**. 검토가 켜져 있으면 `review`(검토 대기)로 | status |
+| `ask_user(id, question)` | 계획에 없는 결정이 필요할 때 질문 → 앱에 표시, 답이 오면 `get_plan`/`next_steps`에 함께 실림 | status |
+| `propose_change(id?, change, why)` | 계획 수정 **제안** (바로 바뀌지 않음) → 앱에 제안 카드, 사용자가 받아들이면 반영 | status |
 | `fail_step(id, reason)` | 실패 + 이유. 뒤 단계는 막힘으로 표시 | status |
 | `log_step(id, note)` | 진행 중 메모 한 줄 (긴 작업의 중간 보고) | status |
-| `create_plan` / `add_steps` | Claude가 계획 초안을 그림 — 단계마다 도구 추천 포함(카탈로그 이름 우선). 기존 create_project/add_flow를 확장 | full |
-| `update_step(id, …)` | 할 일·완료 기준·도구 고치기 | full |
+| (없음) | Claude가 계획을 직접 만들거나 고치는 도구는 두지 않는다. 계획 초안 도움이 필요하면 기존 `add_flow`로 **생각 Box**를 그려 주고, 계획 블록으로 바꾸는 것은 사람이 한다 | — |
 | `report_capabilities(list)` | Claude가 쓸 수 있는 도구 이름 알려 주기 → 카탈로그 | 읽기 |
 
-- `stepPermission` (계획 창에서 설정): `read`(읽기만) / `status`(상태·결과만 적기, **기본값**) / `full`(계획도 고치기).
+- `stepPermission` (계획 창에서 설정): `read`(읽기만) / `status`(상태·결과·질문·제안, **기본값**). 계획 자체를 고치는 권한은 없다.
 - 승인 필요 단계는 **사람이 앱에서 "승인"을 눌러야** `start_step`이 통과한다 (Claude가 스스로 승인 못 함).
 - 모든 변경은 지금처럼 Box에 `Claude` 표시 + 알림 + Ctrl+Z.
 
@@ -177,8 +219,10 @@ interface Doc { …; workflow?: WorkflowMeta }
   1. `get_plan`으로 전체를 읽는다 → 2. `next_steps`에서 하나 고른다 → 3. `start_step`
   4. 단계에 적힌 도구를 쓴다: **스킬**은 Skill 도구로 그 이름을 불러 지시를 따르고, **명령어**는 그 슬래시 명령을 실행하고,
      **커넥터**는 그 커넥터의 도구로, **서브 에이전트**가 정해져 있으면 Agent 도구(subagent_type=그 이름)에 단계 지시와 완료 기준을 넘긴다
-  5. 완료 기준을 확인하고 `finish_step`(요약·결과물) 또는 `fail_step` → 6. 다음 단계로. 승인 필요 단계는 `request_approval` 후 기다린다
-  7. 단계에 없는 위험한 일(배포·삭제·외부 전송)은 하지 않는다. 막히면 멈추고 보고한다
+  5. **만들 것** 목록을 정확히 만들고, **참고 자료**를 따른다. 계획에 없는 기능·파일·구조를 덧붙이지 않는다
+  6. 완료 기준을 항목마다 확인 → `finish_step`(결과물 위치·기준별 근거·쓴 도구) 또는 `fail_step`
+  7. 계획에 없는 결정은 `ask_user`, 계획이 틀려 보이면 `propose_change` — 어느 쪽이든 **스스로 바꾸지 않고 멈춘다**
+  8. 승인·검토 대기 단계는 사용자가 앱에서 누를 때까지 기다린다. 단계에 없는 위험한 일(배포·삭제·외부 전송)은 하지 않는다
 - `planText.ts`가 단계마다 이 지시를 붙인 글을 만들어, 도구 이름이 Claude에게 정확히 전달되게 한다.
 - **한계(사용자에게도 안내)**: ThoughtFlow는 Claude에게 "이 도구를 쓰라"고 **지시**할 뿐 강제하지는 못한다.
   또 Claude 앱마다 쓸 수 있는 것이 다르다:
@@ -216,9 +260,9 @@ interface Doc { …; workflow?: WorkflowMeta }
 | **1. 모델** | v0.11 | StepInfo·WorkflowMeta, 파일 형식 v4 + 예전 파일 읽기, docOps, `src/workflow/graph·transitions·resources` | 단위 테스트: 위상 정렬, ready 계산, 순환, 상태 규칙, v3→v4 |
 | **2. 화면** | v0.11 | StepProps(계획 블록 설정), 보드 상태 표시·ready 강조, 진행률, 계획 창(목록·설정·점검) | e2e: 블록 만들기·도구 고르기·상태 바꾸기·Undo·다시 열기 |
 | **3. 카탈로그** | v0.12 | electron/catalog.ts, ResourcePicker 자동 완성, 직접 입력, "확인 안 됨" 표시 | 단위: SKILL.md·agents 앞부분 읽기 / e2e: 가짜 ~/.claude 폴더로 목록 |
-| **4. MCP 진행 도구** | v0.12 | get_plan·next_steps·start/finish/fail/log_step·request_approval·get_catalog·report_capabilities, 권한, run_plan 프롬프트, 지시문 | e2e: 실제 MCP 클라이언트로 3단계 계획을 처음부터 끝까지 진행, 승인 대기, 거부 경우 |
+| **4. MCP 진행 도구** | v0.12 | get_plan·next_steps·start/finish/fail/log_step·request_approval·ask_user·propose_change·get_catalog·report_capabilities, 권한, run_plan 프롬프트, 지시문 | e2e: 실제 MCP 클라이언트로 3단계 계획을 끝까지 진행 / 순서 어김·결과물 누락·기준 실패·계획 수정 시도가 거부되는지 / 질문→답→이어서 진행 / 검토 대기 |
 | **5. Claude Code 연결** | v0.13 | Claude Code 등록·점검, "Claude로 진행하기" 명령 복사, 계획 파일 내보내기 | e2e: 가짜 홈 폴더에 등록 → 등록된 명령으로 실제 연결 (phase24 방식) |
-| **6. 계획 만들기·템플릿** | v0.13 | create_plan/add_steps(도구 추천), update_step, 템플릿 저장·불러오기 | e2e: Claude가 만든 초안이 단계·도구와 함께 그려짐 |
+| **6. 계획 대비 결과·템플릿** | v0.13 | 계획 대비 결과 보기(결과물·기준·도구 비교), 계획 잠금·버전, 수정 제안 받아들이기, 템플릿 저장·불러오기 | e2e: 제안 받아들이면 버전이 오르고 기록에 남음 / 도구가 다르면 ⚠ |
 | **7. 다듬기** | v0.14 | 실패 경로 Route(`when: failed`), 앱에서 Claude Code 실행(선택), 문서·도움말 | 문서·사용 설명서·릴리스 노트 |
 
 각 단계마다 지금처럼: 단위 테스트 + e2e(Windows CI) + 설치 파일과 같은 앱으로 시작 확인 → 배포.
@@ -249,10 +293,14 @@ tests/workflow*.test.ts, e2e/phase27~31.mjs
 
 ---
 
-## 10. 정해야 할 것 (구현 전에 확인)
+## 10. 정한 것 · 남은 질문
 
-1. **주로 어떤 Claude로 진행하나요?** Claude Code(추천: 스킬·명령어·커넥터·서브 에이전트 모두 가능) / Claude 데스크톱 채팅
+정한 것 (목표: "내가 적고 설계한 계획대로 Claude가 만들어 낸다"):
+- 계획은 사람만 고친다. Claude는 상태·결과·질문·수정 제안만 (3번 질문 → **상태·결과만**)
+- 기본은 한 번에 한 단계씩, 순서대로 (5번 질문 → **하나씩**, 계획 창에서 늘릴 수 있음)
+- 단계마다 만들 것·완료 기준·참고 자료를 적고, 결과를 계획과 나란히 비교한다
+
+남은 질문:
+1. **주로 어떤 Claude로 진행하나요?** Claude Code(추천: 파일을 실제로 만들고 스킬·명령어·커넥터·서브 에이전트 모두 가능) / Claude 데스크톱 채팅
 2. **모든 Box가 단계인가요, 고른 Box만인가요?** (계획: 고른 Box만 — 생각과 계획을 섞어 쓸 수 있게)
-3. **AI 기본 권한**: 상태·결과만 적기(계획) / 계획 고치기까지
-4. **앱이 Claude Code를 직접 띄우는 기능**이 필요한가요, 명령 복사로 충분한가요?
-5. 단계를 **동시에 여러 개** 진행해도 되나요 (서브 에이전트 병렬), 아니면 한 번에 하나씩?
+3. **앱이 Claude Code를 직접 띄우는 기능**이 필요한가요, 명령 복사로 충분한가요?
