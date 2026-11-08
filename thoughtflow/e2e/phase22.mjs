@@ -190,7 +190,7 @@ try {
   await win.keyboard.press('Enter');
   await waitSaved();
   const upgraded = JSON.parse(readFileSync(legacy, 'utf-8'));
-  assert(upgraded.version === 3 && upgraded.tags[0].name === '예전' && upgraded.nodes[0].tagIds.length === 1, 'saving upgrades it to v3');
+  assert(upgraded.version === 4 && upgraded.tags[0].name === '예전' && upgraded.nodes[0].tagIds.length === 1, 'saving upgrades it to the current format (v4)');
   console.log('PHASE 22 OK');
 } finally {
   await shutdown(app);

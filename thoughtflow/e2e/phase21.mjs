@@ -93,7 +93,7 @@ try {
   // 저장: JSON에는 경로와 정보만 (Base64 없음)
   await waitSaved();
   const saved = JSON.parse(readFileSync(filePath, 'utf-8'));
-  assert(saved.version === 3 && saved.nodes[0].attachments[0].relativePath === a.relativePath, 'project file keeps relativePath + metadata');
+  assert(saved.version === 4 && saved.nodes[0].attachments[0].relativePath === a.relativePath, 'project file keeps relativePath + metadata');
   assert(!/base64|iVBOR/.test(readFileSync(filePath, 'utf-8')), 'no binary data inside the project JSON');
 
   // ── 끌어다 놓기 (경로 없는 파일 → 데이터로 복사)

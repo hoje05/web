@@ -2,13 +2,15 @@
  * Project 파일 형식 (.tflow, JSON).
  *
  * {
- *   "format": "thoughtflow", "version": 3,
+ *   "format": "thoughtflow", "version": 4,
  *   "board": { "zoom", "panX", "panY" },
  *   "tags": [{ "id", "name", "normalizedName", "active" }],   // 저장된 태그 (v3). active=false = 지운 태그(붙어 있던 Box에는 남음)
  *   "nodes": [{ "id", "x", "y", "width", "height", "text", "note", "origin"?,   // note = 오른쪽 창의 메모 (v2), origin = 만든 AI (선택)
  *               "tagIds": [...],                                              // 붙인 태그 (v3)
  *               "attachments": [{ "id", "type": "image" | "file", "name", "relativePath": "assets/…",
- *                                 "mimeType", "size", "width"?, "height"? }] }],   // 첨부 (v3). 파일은 "프로젝트 이름.assets" 폴더에
+ *                                 "mimeType", "size", "width"?, "height"? }],      // 첨부 (v3). 파일은 "프로젝트 이름.assets" 폴더에
+ *               "step"?: { "status", "goal", "doneWhen", "deliverables", … } }],   // 계획 블록 (v4, src/model/types.ts의 StepInfo)
+ *   "workflow"?: { "goal", "defaults", "stepPermission", "locked", "parallel", "proposals", "workingDir"? },  // 계획 설정 (v4)
  *   "edges": [{ "id", "sourceNodeId", "targetNodeId",
  *               "sourceAnchor": { "side" }, "targetAnchor": { "side" },
  *               "pathPoints": [[u, v], ...],   // Chord 좌표 (source → target 순서)
@@ -33,14 +35,16 @@ import {
 } from '../model/types';
 import { normalizeTagName } from '../model/tags';
 import { noteImagePaths } from '../editor/markdown';
+import { parseStep, parseWorkflow } from '../workflow/fileData';
 import { MAX_ZOOM, MIN_ZOOM } from '../viewport/viewport';
 
 export const FILE_FORMAT = 'thoughtflow';
 /**
- * v1: 초기 형식, v2: Box note 추가, v3: 태그(tags, tagIds)와 첨부(attachments) 추가.
+ * v1: 초기 형식, v2: Box note 추가, v3: 태그(tags, tagIds)와 첨부(attachments) 추가,
+ * v4: 계획 블록(step)과 계획 설정(workflow) 추가.
  * 예전 파일도 그대로 읽는다 (없는 칸은 빈 값으로).
  */
-export const FILE_VERSION = 3;
+export const FILE_VERSION = 4;
 export const FILE_EXTENSION = 'tflow';
 
 const SIDES: Side[] = ['top', 'right', 'bottom', 'left'];
@@ -84,6 +88,7 @@ export function serializeBoard(doc: Doc, viewport: Viewport, ui?: BoardUiState):
         size: a.size,
         ...(a.width && a.height ? { width: a.width, height: a.height } : {}),
       })),
+      ...(n.step ? { step: n.step } : {}),
     })),
     edges: Object.values(doc.edges).map((e) => ({
       id: e.id,
@@ -94,6 +99,7 @@ export function serializeBoard(doc: Doc, viewport: Viewport, ui?: BoardUiState):
       pathPoints: e.pathPoints.map(([u, v]) => [round(u, 5), round(v, 5)]),
       pathMode: e.pathMode,
     })),
+    ...(doc.workflow ? { workflow: doc.workflow } : {}),
     ...(ui ? { ui: { tabs: ui.tabs.filter((id) => doc.nodes[id]), activeTab: ui.activeTab, panelOpen: ui.panelOpen } } : {}),
   };
   return JSON.stringify(data, null, 2);
@@ -168,6 +174,8 @@ export function parseBoard(text: string): {
     const attachments = Array.isArray(raw.attachments) ? raw.attachments.map(parseAttachment).filter((a): a is Attachment => !!a) : [];
     if (Array.isArray(raw.attachments) && attachments.length < raw.attachments.length) warnings.push('잘못된 첨부 정보를 건너뛰었습니다.');
     if (attachments.length) nodes[raw.id].attachments = [...new Map(attachments.map((a) => [a.id, a])).values()];
+    const step = parseStep(raw.step);
+    if (step) nodes[raw.id].step = step;
   }
 
   const edges: Record<string, RouteEdge> = {};
@@ -216,7 +224,9 @@ export function parseBoard(text: string): {
     const activeTab = typeof data.ui.activeTab === 'string' && tabs.includes(data.ui.activeTab) ? data.ui.activeTab : (tabs[0] ?? null);
     ui = { tabs, activeTab, panelOpen: data.ui.panelOpen === true && tabs.length > 0 };
   }
-  return { doc: { nodes, edges, tags }, viewport, ui, warnings };
+  const stepIds = new Set(Object.values(nodes).filter((n) => n.step).map((n) => n.id));
+  const workflow = parseWorkflow(data.workflow, stepIds);
+  return { doc: { nodes, edges, tags, ...(workflow ? { workflow } : {}) }, viewport, ui, warnings };
 }
 
 const ATTACHMENT_PATH = /^assets\/[^/\\]+$/;

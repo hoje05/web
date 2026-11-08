@@ -22,6 +22,122 @@ export interface BoxNode {
   tagIds?: string[];
   /** 첨부한 이미지·파일 (내용은 프로젝트의 자료 폴더에, 여기에는 위치와 정보만). 없으면 첨부 없음. */
   attachments?: Attachment[];
+  /** 계획 블록이면 그 설정과 진행 상태 (src/workflow). 없으면 그냥 생각 Box. */
+  step?: StepInfo;
+}
+
+// ───────────── 워크플로우 (계획 블록) ─────────────
+// 계획은 사람이 쓰고 Claude는 그대로 실행한다: 할 일·완료 기준·만들 것·도구는 사람만 고치고,
+// AI는 상태·결과·질문·수정 제안만 적는다 (규칙은 src/workflow/transitions.ts).
+
+/**
+ * 계획 블록의 상태. "할 수 있음(ready)"·"막힘(blocked)"은 앞 단계를 보고 계산하므로 저장하지 않는다.
+ *  todo 할 일 · running 진행 중 · waiting 승인 대기 · asking 질문에 답을 기다림 · review 검토 대기
+ *  done 완료 · failed 실패 · skipped 건너뜀
+ */
+export type StepStatus = 'todo' | 'running' | 'waiting' | 'asking' | 'review' | 'done' | 'failed' | 'skipped';
+
+/** 단계에서 쓸 도구 (이름만 — 실제 도구는 Claude 쪽에 있다) */
+export interface StepResources {
+  /** 스킬 이름 (예: dataviz, my-team:release-check) */
+  skills: string[];
+  /** 슬래시 명령어 (예: /review) */
+  commands: string[];
+  /** 커넥터·MCP 서버 이름 (예: Gmail, github) */
+  connectors: string[];
+  /** 이 단계를 맡길 서브 에이전트 */
+  subagent?: { type: string; model?: string; instructions?: string };
+  /** 이 단계에서 하면 안 되는 것 */
+  avoid?: string[];
+}
+
+/** 만들 것 하나: 경로(선택) + 조건 */
+export interface Deliverable {
+  path?: string;
+  spec: string;
+}
+
+/** Claude가 단계를 끝내며 보고한 결과 */
+export interface StepResult {
+  summary: string;
+  /** 만들 것 각 항목(번호) → 실제로 만든 위치 */
+  outputs: { deliverable: number; path: string }[];
+  /** 완료 기준 각 항목(번호)의 확인 결과 */
+  criteria: { item: number; pass: boolean; evidence: string }[];
+  /** 실제로 쓴 도구 (지정한 것과 비교) */
+  used: StepResources;
+  /** 실행할 때의 계획 지문 (planFingerprint) */
+  planVersion: string;
+  at: string;
+  by: string;
+}
+
+export interface StepLogEntry {
+  at: string;
+  by: string;
+  status: StepStatus;
+  note?: string;
+}
+
+export interface StepQuestion {
+  id: string;
+  at: string;
+  by: string;
+  question: string;
+  answer?: string;
+  answeredAt?: string;
+}
+
+export interface StepInfo {
+  status: StepStatus;
+  /** 할 일 (한 줄 지시 — 자세한 설계는 메모에) */
+  goal: string;
+  /** 완료 기준 체크리스트 — 모두 통과해야 완료 */
+  doneWhen: string[];
+  /** 만들 것 */
+  deliverables: Deliverable[];
+  /** 꼭 읽고 따를 참고 자료 (파일 경로, 링크, 다른 단계 이름 등) */
+  references: string[];
+  /** 누가 하는가 */
+  assignee: 'claude' | 'human';
+  /** 시작 전에 사람 승인이 필요한가 */
+  approval: 'auto' | 'ask';
+  /** 승인을 받았는가 (approval = ask일 때. 단계가 끝나면 다시 false) */
+  approved?: boolean;
+  /** Claude가 끝내도 사람이 검토해야 완료 */
+  review: boolean;
+  resources: StepResources;
+  result?: StepResult;
+  questions: StepQuestion[];
+  log: StepLogEntry[];
+}
+
+/** Claude가 낸 계획 수정 제안 (사람이 받아들여야 반영) */
+export interface ChangeProposal {
+  id: string;
+  at: string;
+  by: string;
+  stepId?: string;
+  change: string;
+  why: string;
+  state: 'open' | 'accepted' | 'rejected';
+}
+
+/** 보드 전체의 계획 설정 */
+export interface WorkflowMeta {
+  /** 계획 전체 목표 */
+  goal: string;
+  /** Claude Code가 작업할 폴더 (선택) */
+  workingDir?: string;
+  /** 모든 단계에 기본으로 붙는 도구 */
+  defaults: StepResources;
+  /** AI가 할 수 있는 일: read 읽기만, status 상태·결과·질문·제안 적기 (계획 자체는 고치지 못함) */
+  stepPermission: 'read' | 'status';
+  /** 계획 잠금: 켜져 있으면 사람도 실수로 계획 내용을 바꾸지 않도록 막는다 */
+  locked: boolean;
+  /** 동시에 진행할 수 있는 단계 수 (기본 1) */
+  parallel: number;
+  proposals: ChangeProposal[];
 }
 
 /**
@@ -93,6 +209,8 @@ export interface Doc {
   edges: Record<string, RouteEdge>;
   /** 저장된 태그 (만든 순서). Undo 기록에 함께 들어가도록 Doc에 둔다. */
   tags: Record<string, Tag>;
+  /** 계획 설정 (계획 블록이 있는 보드). 없으면 기본값 (src/workflow/defaults.ts) */
+  workflow?: WorkflowMeta;
 }
 
 /** screen = world * zoom + pan */

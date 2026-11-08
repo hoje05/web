@@ -38,7 +38,7 @@ describe('file format', () => {
   it('contains the required fields', () => {
     const json = JSON.parse(serializeBoard(doc, { zoom: 1, panX: 0, panY: 0 }));
     expect(Object.keys(json.nodes[0])).toEqual(['id', 'x', 'y', 'width', 'height', 'text', 'note', 'tagIds', 'attachments']);
-    expect(json.version).toBe(3);
+    expect(json.version).toBe(4);
     expect(json.tags).toEqual([]);
     expect(Object.keys(json.edges[0])).toEqual([
       'id',
@@ -118,8 +118,8 @@ describe('file format', () => {
     expect(back.tags).toEqual({});
     expect(back.nodes.a.tagIds ?? []).toEqual([]);
     expect(back.nodes.a.attachments ?? []).toEqual([]);
-    // 다시 저장하면 v3
-    expect(JSON.parse(serializeBoard(back, { zoom: 1, panX: 0, panY: 0 })).version).toBe(3);
+    // 다시 저장하면 지금 형식(v4)
+    expect(JSON.parse(serializeBoard(back, { zoom: 1, panX: 0, panY: 0 })).version).toBe(4);
   });
 
   it('merges duplicate tag names and drops unknown tag ids', () => {

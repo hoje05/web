@@ -249,7 +249,12 @@ interface Doc { …; workflow?: WorkflowMeta }
   - 작업 폴더에서 실행할 명령 복사: `claude "ThoughtFlow의 '<계획 이름>' 계획을 run_plan 방식으로 진행해줘"`
   - (선택, 나중 단계) **앱에서 바로 실행**: 작업 폴더에서 Claude Code를 새 터미널로 띄우기. 앱이 Claude를 몰래 돌리지는 않는다 —
     사용자가 누를 때만, 보이는 터미널로.
-- (선택) 계획을 Claude Code가 읽을 수 있는 파일로 내보내기: 작업 폴더에 `.claude/thoughtflow-plan.md` (MCP 없이도 진행 가능하게).
+- **계획 → 스킬 만들기**: 작업 폴더의 `.claude/skills/<계획 이름>/`에 스킬을 써 넣어 Claude Code에서 `/계획이름`으로 시작한다.
+  - `SKILL.md` = 진행 규칙(next_steps → start_step → 만들 것 작성 → finish_step, 모르면 ask_user, 계획은 고치지 않음) + 계획 목표
+  - `steps/01-….md` = 단계별 할 일·완료 기준·만들 것·참고·도구 (그 단계에서만 읽음)
+  - 스킬에 계획 지문(planFingerprint)을 적고, 보드의 계획이 바뀌면 다시 써 넣는다 (버전이 다르면 앱이 알림)
+  - ThoughtFlow에 연결되지 않았을 때는 스킬 내용대로 진행하고 결과를 `.claude/skills/<계획>/results.json`에 적게 한다 → 나중에 앱이 가져와 보드에 반영
+  - 스킬은 "지시"일 뿐이라 순서·완료 검사는 MCP 연결(앱)이 맡는다. 스킬 단독은 보조 수단.
 
 ---
 
@@ -257,13 +262,13 @@ interface Doc { …; workflow?: WorkflowMeta }
 
 | 단계 | 버전 | 내용 | 확인 |
 |---|---|---|---|
-| **1. 모델** | v0.11 | StepInfo·WorkflowMeta, 파일 형식 v4 + 예전 파일 읽기, docOps, `src/workflow/graph·transitions·resources` | 단위 테스트: 위상 정렬, ready 계산, 순환, 상태 규칙, v3→v4 |
+| **1. 모델** ✅ | v0.11 | StepInfo·WorkflowMeta, 파일 형식 v4 + 예전 파일 읽기, docOps, `src/workflow/graph·transitions·resources` | 단위 테스트: 위상 정렬, ready 계산, 순환, 상태 규칙, v3→v4 |
 | **2. 화면** | v0.11 | StepProps(계획 블록 설정), 보드 상태 표시·ready 강조, 진행률, 계획 창(목록·설정·점검) | e2e: 블록 만들기·도구 고르기·상태 바꾸기·Undo·다시 열기 |
 | **3. 카탈로그** | v0.12 | electron/catalog.ts, ResourcePicker 자동 완성, 직접 입력, "확인 안 됨" 표시 | 단위: SKILL.md·agents 앞부분 읽기 / e2e: 가짜 ~/.claude 폴더로 목록 |
 | **4. MCP 진행 도구** | v0.12 | get_plan·next_steps·start/finish/fail/log_step·request_approval·ask_user·propose_change·get_catalog·report_capabilities, 권한, run_plan 프롬프트, 지시문 | e2e: 실제 MCP 클라이언트로 3단계 계획을 끝까지 진행 / 순서 어김·결과물 누락·기준 실패·계획 수정 시도가 거부되는지 / 질문→답→이어서 진행 / 검토 대기 |
-| **5. Claude Code 연결** | v0.13 | Claude Code 등록·점검, "Claude로 진행하기" 명령 복사, 계획 파일 내보내기 | e2e: 가짜 홈 폴더에 등록 → 등록된 명령으로 실제 연결 (phase24 방식) |
+| **5. Claude Code 연결** | v0.13 | Claude Code 등록·점검, "Claude로 진행하기" 명령 복사, 계획 → 스킬 만들기 | e2e: 가짜 홈 폴더에 등록 → 등록된 명령으로 실제 연결 (phase24 방식) |
 | **6. 계획 대비 결과·템플릿** | v0.13 | 계획 대비 결과 보기(결과물·기준·도구 비교), 계획 잠금·버전, 수정 제안 받아들이기, 템플릿 저장·불러오기 | e2e: 제안 받아들이면 버전이 오르고 기록에 남음 / 도구가 다르면 ⚠ |
-| **7. 다듬기** | v0.14 | 실패 경로 Route(`when: failed`), 앱에서 Claude Code 실행(선택), 문서·도움말 | 문서·사용 설명서·릴리스 노트 |
+| **7. 다듬기** | v0.14 | 실패 경로 Route(`when: failed`), 단계별 서브 에이전트 파일 만들기(도구 제한), 스킬 결과 파일 가져오기, 앱에서 Claude Code 실행(선택), 문서·도움말 | 문서·사용 설명서·릴리스 노트 |
 
 각 단계마다 지금처럼: 단위 테스트 + e2e(Windows CI) + 설치 파일과 같은 앱으로 시작 확인 → 배포.
 
@@ -304,3 +309,17 @@ tests/workflow*.test.ts, e2e/phase27~31.mjs
 1. **주로 어떤 Claude로 진행하나요?** Claude Code(추천: 파일을 실제로 만들고 스킬·명령어·커넥터·서브 에이전트 모두 가능) / Claude 데스크톱 채팅
 2. **모든 Box가 단계인가요, 고른 Box만인가요?** (계획: 고른 Box만 — 생각과 계획을 섞어 쓸 수 있게)
 3. **앱이 Claude Code를 직접 띄우는 기능**이 필요한가요, 명령 복사로 충분한가요?
+
+---
+
+## 11. 진행 기록
+
+### 1단계 (모델) — 완료
+- `src/model/types.ts`: `StepInfo`(상태·할 일·완료 기준·만들 것·참고·담당·승인·검토·도구·결과·질문·기록), `StepResources`, `WorkflowMeta`(목표·작업 폴더·기본 도구·AI 권한·잠금·동시 진행 수·수정 제안), `Doc.workflow`
+- `src/workflow/graph.ts`: 순서(위상 정렬, 같은 단계끼리는 보드 위치 순), 순환 찾기, ready/blocked 계산, 다음 단계, 진행률, 계획 지문
+- `src/workflow/transitions.ts`: 사람(계획 쓰기·승인·검토·답하기·상태 바꾸기) / AI(시작·승인 요청·기록·질문·실패·완료 보고·수정 제안) 규칙.
+  완료 보고는 만들 것마다 위치, 완료 기준마다 통과·근거, 실제로 쓴 도구가 없으면 거부
+- `src/workflow/resources.ts`: 도구 이름 정리, 기본값 합치기, 지정 ↔ 실제 비교
+- `src/workflow/fileData.ts` + `fileFormat.ts`: 파일 형식 v4 (예전 파일 그대로 열림, 손상된 계획 값은 고쳐 읽음)
+- 테스트: `tests/workflow.test.ts`
+- 화면은 아직 없다 (2단계). 저장 형식이 v4가 되므로 2단계와 함께 배포한다.
