@@ -3,6 +3,7 @@ import { existsSync, promises as fs } from 'fs';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { setupAi, shutdownAi, watchRenderer, type StoredAi } from './ai';
+import { setupCatalog } from './catalog';
 import { assetScheme, copyAssetDir, renameAssetDir, setupAssets, trashAssetDir } from './assets';
 
 const FILE_FILTERS = [
@@ -662,6 +663,7 @@ if (!gotLock) {
     serveAppFiles();
     registerIpc();
     setupAssets({ isAllowed: (p) => allowedPaths.has(path.resolve(p)), getWindow: () => mainWindow });
+    setupCatalog();
     buildMenu();
     createWindow();
     markStartup('window');

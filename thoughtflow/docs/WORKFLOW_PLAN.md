@@ -264,7 +264,7 @@ interface Doc { …; workflow?: WorkflowMeta }
 |---|---|---|---|
 | **1. 모델** ✅ | v0.11 | StepInfo·WorkflowMeta, 파일 형식 v4 + 예전 파일 읽기, docOps, `src/workflow/graph·transitions·resources` | 단위 테스트: 위상 정렬, ready 계산, 순환, 상태 규칙, v3→v4 |
 | **2. 화면** ✅ | v0.11 | StepProps(계획 블록 설정), 보드 상태 표시·ready 강조, 진행률, 계획 창(목록·설정·점검) | e2e: 블록 만들기·도구 고르기·상태 바꾸기·Undo·다시 열기 |
-| **3. 카탈로그** | v0.12 | electron/catalog.ts, ResourcePicker 자동 완성, 직접 입력, "확인 안 됨" 표시 | 단위: SKILL.md·agents 앞부분 읽기 / e2e: 가짜 ~/.claude 폴더로 목록 |
+| **3. 카탈로그** ✅ | v0.12 | electron/catalog.ts, ResourcePicker 자동 완성, 직접 입력, "확인 안 됨" 표시 | 단위: SKILL.md·agents 앞부분 읽기 / e2e: 가짜 ~/.claude 폴더로 목록 |
 | **4. MCP 진행 도구** | v0.12 | get_plan·next_steps·start/finish/fail/log_step·request_approval·ask_user·propose_change·get_catalog·report_capabilities, 권한, run_plan 프롬프트, 지시문 | e2e: 실제 MCP 클라이언트로 3단계 계획을 끝까지 진행 / 순서 어김·결과물 누락·기준 실패·계획 수정 시도가 거부되는지 / 질문→답→이어서 진행 / 검토 대기 |
 | **5. Claude Code 연결** | v0.13 | Claude Code 등록·점검, "Claude로 진행하기" 명령 복사, 계획 → 스킬 만들기 | e2e: 가짜 홈 폴더에 등록 → 등록된 명령으로 실제 연결 (phase24 방식) |
 | **6. 계획 대비 결과·템플릿** | v0.13 | 계획 대비 결과 보기(결과물·기준·도구 비교), 계획 잠금·버전, 수정 제안 받아들이기, 템플릿 저장·불러오기 | e2e: 제안 받아들이면 버전이 오르고 기록에 남음 / 도구가 다르면 ⚠ |
@@ -330,3 +330,11 @@ tests/workflow*.test.ts, e2e/phase27~31.mjs
 - 계획 창 `WorkflowPanel`: 목표·작업 폴더·잠금·동시 진행 수·AI 권한·기본 도구·수정 제안·단계 목록·계획 점검(`src/workflow/check.ts`)
 - 도구 이름은 아직 직접 입력 (자동 완성 목록은 3단계)
 - e2e: `e2e/phase27.mjs`
+
+### 3단계 (도구 목록) — 완료 (v0.12.0)
+- `electron/catalog.ts`: ~/.claude(skills·commands·agents), 플러그인(.claude-plugin/plugin.json이 있는 폴더, 이름은 `플러그인:이름`), 작업 폴더의 .claude와 .mcp.json,
+  ~/.claude.json의 mcpServers(전체 + 그 작업 폴더), Claude 데스크톱 설정의 mcpServers, 기본 서브 에이전트. 읽기만, 파일 수·크기 제한, 30초 캐시, IPC `catalog:list`
+- `src/workflow/catalog.ts`: 머리말 읽기, 자동 완성 순위, 중복 정리 / `src/workflow/useCatalog.ts`
+- 화면: 도구 칸 자동 완성(설명·출처), 목록에 없는 이름은 점선, 계획 창의 찾은 도구 수·다시 찾기
+- claude.ai 커넥터는 PC에서 찾을 수 없음 → 직접 입력. Claude가 알려 주는 목록(report_capabilities)은 4단계에서
+- 테스트: `tests/catalog.test.ts`, `e2e/phase28.mjs`

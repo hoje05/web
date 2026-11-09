@@ -9,6 +9,7 @@
  * OS 접근은 Electron preload가 노출한 window.thoughtflow API로만 한다.
  */
 import { flushEditing } from '../interaction/editing';
+import type { Catalog } from '../workflow/catalog';
 import type { AiRequest, AiResponse, AiSettings, AiState, Diagnosis } from '../ai/protocol';
 import { EMPTY_DOC, type Attachment, type Doc } from '../model/types';
 import { useStore } from '../store/store';
@@ -70,6 +71,7 @@ type Api = {
   aiDiagnose: () => Promise<Diagnosis>;
   aiClaudeRegister: () => Promise<{ ok: true; files: string[] } | { ok: false; error: string }>;
   aiClaudeUnregister: () => Promise<{ ok: true; removed: number } | { ok: false; error: string }>;
+  catalogList: (workingDir: string | null, refresh?: boolean) => Promise<Catalog>;
 };
 
 /** 프로젝트 = 보드 파일 하나 */

@@ -6,6 +6,7 @@ import { stepOrder } from '../workflow/graph';
 import { editWorkflow, resolveProposal } from '../workflow/transitions';
 import { STATUS_LABEL, applyPlan, useProgress, useStepStatuses } from '../workflow/useWorkflow';
 import { ResourceEditor, TextField } from './StepProps';
+import { useCatalog } from '../workflow/useCatalog';
 
 /**
  * 계획 창: 계획 전체 목표·작업 폴더·기본 도구·AI 권한·잠금, 진행 순서대로 단계 목록, 계획 점검, Claude의 수정 제안.
@@ -144,6 +145,7 @@ export function WorkflowPanel() {
           <section className="wf-section">
             <div className="step-label">모든 단계에 쓸 기본 도구</div>
             <ResourceEditor value={wf.defaults} disabled={wf.locked} onChange={(defaults) => run((d) => editWorkflow(d, { defaults }))} />
+            <CatalogSummary />
           </section>
 
           {proposals.length > 0 && (
@@ -220,5 +222,22 @@ export function WorkflowPanel() {
         </div>
       </div>
     </>
+  );
+}
+
+/** 이 PC에서 찾은 도구 개수 + 다시 찾기 (스킬을 새로 설치했을 때) */
+function CatalogSummary() {
+  const { catalog, loading, refresh } = useCatalog();
+  const count = (k: string) => catalog.items.filter((i) => i.kind === k && i.source !== 'builtin').length;
+  return (
+    <p className="step-hint wf-catalog" data-testid="wf-catalog">
+      이 PC에서 찾은 도구: 스킬 {count('skill')} · 명령어 {count('command')} · 커넥터 {count('connector')} · 서브 에이전트 {count('subagent')}
+      {catalog.workingDir ? ' (작업 폴더 포함)' : ''}{' '}
+      <button className="ai-link" disabled={loading} data-testid="wf-catalog-refresh" onClick={refresh}>
+        {loading ? '찾는 중…' : '다시 찾기'}
+      </button>
+      <br />
+      claude.ai에 연결한 커넥터(Gmail 등)는 PC에 없어서 목록에 나오지 않습니다 — 이름을 직접 적으면 됩니다.
+    </p>
   );
 }

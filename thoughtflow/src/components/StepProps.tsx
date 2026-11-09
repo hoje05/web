@@ -1,9 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { BoxNode, Deliverable, StepInfo, StepResources, StepStatus } from '../model/types';
 import { useStore } from '../store/store';
 import { workflowOf } from '../workflow/defaults';
 import { planFingerprint } from '../workflow/graph';
-import { mergeResources, resourceDiff, type ResourceKind } from '../workflow/resources';
+import { SOURCE_LABEL, findInCatalog, searchCatalog, type CatalogItem } from '../workflow/catalog';
+import { cleanName, mergeResources, resourceDiff, type ResourceKind } from '../workflow/resources';
+import { useCatalog } from '../workflow/useCatalog';
 import {
   HUMAN,
   acceptReview,
@@ -514,8 +516,9 @@ const KINDS: {
   },
 ];
 
-/** 쓸 도구: 스킬·명령어·커넥터 칩 + 서브 에이전트 + 하지 말 것 */
+/** 쓸 도구: 스킬·명령어·커넥터 칩 + 서브 에이전트 + 하지 말 것. 이 PC에서 찾은 목록으로 자동 완성 (없는 이름도 적을 수 있다). */
 export function ResourceEditor({ value, disabled, onChange }: { value: StepResources; disabled?: boolean; onChange: (r: StepResources) => void }) {
+  const { catalog } = useCatalog();
   const sub = value.subagent;
   const setSub = (patch: Partial<NonNullable<StepResources['subagent']>>) => {
     const next = { type: sub?.type ?? '', ...sub, ...patch };
@@ -532,28 +535,16 @@ export function ResourceEditor({ value, disabled, onChange }: { value: StepResou
           <span className="res-label">{label}</span>
           <div className="res-chips">
             {value[key].map((name) => (
-              <span key={name} className={`res-chip res-${kind}`} data-testid="res-chip">
-                {name}
-                {!disabled && (
-                  <button
-                    aria-label={`${name} 빼기`}
-                    onClick={() =>
-                      onChange({
-                        ...value,
-                        [key]: value[key].filter((n) => n !== name),
-                      })
-                    }
-                  >
-                    ×
-                  </button>
-                )}
-              </span>
+              <ResourceChip key={name} kind={kind} name={name} items={catalog.items} onRemove={disabled ? undefined : () => onChange({ ...value, [key]: value[key].filter((n) => n !== name) })} />
             ))}
             {!disabled && (
-              <ChipInput
+              <SuggestInput
+                kind={kind}
+                items={catalog.items}
+                exclude={value[key]}
                 placeholder={`＋ ${placeholder}`}
                 testId={`res-${kind}-add`}
-                onAdd={(name) => onChange({ ...value, [key]: [...value[key], name] })}
+                onPick={(name) => onChange({ ...value, [key]: [...value[key], name] })}
               />
             )}
           </div>
@@ -562,22 +553,18 @@ export function ResourceEditor({ value, disabled, onChange }: { value: StepResou
       <div className="res-row" data-testid="res-subagent">
         <span className="res-label">서브 에이전트</span>
         <div className="res-sub">
-          <TextField
-            value={sub?.type ?? ''}
-            placeholder="종류 (예: Explore, general-purpose)"
-            disabled={disabled}
-            testId="res-subagent-type"
-            onCommit={(type) => setSub({ type: type.trim() })}
-          />
+          {sub ? (
+            <div className="res-chips">
+              <ResourceChip kind="subagent" name={sub.type} items={catalog.items} onRemove={disabled ? undefined : () => setSub({ type: '' })} />
+            </div>
+          ) : (
+            !disabled && (
+              <SuggestInput kind="subagent" items={catalog.items} exclude={[]} placeholder="＋ 종류 (예: Explore, general-purpose)" testId="res-subagent-type" onPick={(type) => setSub({ type })} />
+            )
+          )}
           {sub && (
             <>
-              <TextField
-                value={sub.model ?? ''}
-                placeholder="모델 (비우면 기본)"
-                disabled={disabled}
-                testId="res-subagent-model"
-                onCommit={(model) => setSub({ model: model.trim() || undefined })}
-              />
+              <TextField value={sub.model ?? ''} placeholder="모델 (비우면 기본)" disabled={disabled} testId="res-subagent-model" onCommit={(model) => setSub({ model: model.trim() || undefined })} />
               <TextField
                 value={sub.instructions ?? ''}
                 placeholder="서브 에이전트에게 따로 줄 지시 (선택)"
@@ -592,41 +579,122 @@ export function ResourceEditor({ value, disabled, onChange }: { value: StepResou
       </div>
       <div className="res-row" data-testid="res-avoid">
         <span className="res-label">하지 말 것</span>
-        <ListEditor
-          items={value.avoid ?? []}
-          placeholder="＋ 이 단계에서 하면 안 되는 것"
-          disabled={disabled}
-          testId="res-avoid-list"
-          onChange={(avoid) => onChange({ ...value, avoid })}
-        />
+        <ListEditor items={value.avoid ?? []} placeholder="＋ 이 단계에서 하면 안 되는 것" disabled={disabled} testId="res-avoid-list" onChange={(avoid) => onChange({ ...value, avoid })} />
       </div>
     </div>
   );
 }
 
-function ChipInput({ placeholder, testId, onAdd }: { placeholder: string; testId: string; onAdd: (name: string) => void }) {
+/** 고른 도구 하나. 이 PC에서 찾지 못한 이름은 점선 (claude.ai 커넥터처럼 PC에 없는 것일 수도 있다) */
+function ResourceChip({ kind, name, items, onRemove }: { kind: ResourceKind; name: string; items: CatalogItem[]; onRemove?: () => void }) {
+  const found = findInCatalog(items, kind, name);
+  const title = found
+    ? `${found.description || name}\n(${SOURCE_LABEL[found.source]}${found.where ? ` · ${found.where}` : ''})`
+    : '이 PC에서 찾지 못한 이름입니다. 이름이 맞는지 확인하세요 (claude.ai에 연결한 커넥터처럼 PC에 없는 것일 수도 있습니다).';
+  return (
+    <span className={`res-chip res-${kind}${found ? '' : ' is-unknown'}`} title={title} data-testid="res-chip" data-known={found ? 'yes' : 'no'}>
+      {name}
+      {onRemove && (
+        <button aria-label={`${name} 빼기`} onClick={onRemove}>
+          ×
+        </button>
+      )}
+    </span>
+  );
+}
+
+/**
+ * 도구 이름 입력 + 자동 완성. ↑↓로 고르고 Enter, 또는 그냥 적고 Enter(목록에 없는 이름도 된다).
+ * 칸을 떠나면 적던 이름을 넣는다.
+ */
+function SuggestInput(props: { kind: ResourceKind; items: CatalogItem[]; exclude: string[]; placeholder: string; testId: string; onPick: (name: string) => void }) {
   const [text, setText] = useState('');
-  const add = () => {
-    if (text.trim()) onAdd(text.trim());
+  /** 목록을 펼쳤는가: 칸에 들어가거나 글을 쓰거나 ↑↓를 누르면 펼치고, 고르거나 Esc를 누르면 접는다 */
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const options = open ? searchCatalog(props.items, props.kind, text, props.exclude) : [];
+  // 목록은 스크롤되는 계획 칸에 잘리지 않도록 창 기준으로 띄운다 (칸 바로 아래, 모자라면 위)
+  const rect = options.length ? inputRef.current?.getBoundingClientRect() : undefined;
+  const listStyle = rect
+    ? (() => {
+        const width = Math.min(Math.max(rect.width, 300), window.innerWidth - 16);
+        const height = Math.min(260, options.length * 44 + 8);
+        const below = rect.bottom + 4 + height <= window.innerHeight - 8;
+        return {
+          left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+          top: below ? rect.bottom + 4 : Math.max(8, rect.top - 4 - height),
+          width,
+        };
+      })()
+    : undefined;
+  useEffect(() => setHi(-1), [text]);
+  const pick = (name: string) => {
+    const n = cleanName(props.kind, name);
+    if (n) props.onPick(n);
     setText('');
+    setHi(-1);
+    setOpen(false);
   };
   return (
-    <input
-      className="res-input"
-      value={text}
-      placeholder={placeholder}
-      spellCheck={false}
-      data-testid={testId}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={add}
-      onKeyDown={(e) => {
-        if (e.nativeEvent.isComposing) return;
-        if (e.key === 'Enter' || e.key === ',') {
-          e.preventDefault();
-          add();
-        }
-      }}
-    />
+    <div className="res-input-wrap">
+      <input
+        ref={inputRef}
+        className="res-input"
+        value={text}
+        placeholder={props.placeholder}
+        spellCheck={false}
+        data-testid={props.testId}
+        onChange={(e) => {
+          setText(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => {
+          setOpen(false);
+          if (text.trim()) pick(text);
+        }}
+        onKeyDown={(e) => {
+          if (e.nativeEvent.isComposing) return;
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (!open) {
+              setOpen(true);
+              return;
+            }
+            const n = options.length;
+            if (n) setHi((h) => (e.key === 'ArrowDown' ? (h + 1) % n : h <= 0 ? n - 1 : h - 1));
+          } else if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            if (hi >= 0 && options[hi]) pick(options[hi].name);
+            else if (text.trim()) pick(text);
+          } else if (e.key === 'Escape' && options.length) {
+            e.preventDefault();
+            e.stopPropagation();
+            setOpen(false);
+          }
+        }}
+      />
+      {options.length > 0 && (
+        <div className="res-suggest" role="listbox" style={listStyle} data-testid="res-suggest" onMouseDown={(e) => e.preventDefault()}>
+          {options.map((o, i) => (
+            <button
+              key={`${o.source}:${o.name}`}
+              role="option"
+              aria-selected={i === hi}
+              className={`res-option${i === hi ? ' is-hi' : ''}`}
+              data-testid="res-option"
+              onMouseEnter={() => setHi(i)}
+              onClick={() => pick(o.name)}
+            >
+              <span className="res-option-name">{o.name}</span>
+              <span className="res-option-source">{o.where ?? SOURCE_LABEL[o.source]}</span>
+              {o.description && <span className="res-option-desc">{o.description}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

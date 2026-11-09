@@ -3936,3 +3936,93 @@ svg.layer {
   display: flex;
   gap: 6px;
 }
+
+/* 도구 자동 완성 */
+.res-input-wrap {
+  position: relative;
+  flex: 1 1 110px;
+  min-width: 100px;
+  display: flex;
+}
+.res-input-wrap .res-input {
+  flex: 1;
+}
+.res-suggest {
+  position: fixed;
+  z-index: 60;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+}
+.res-option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.res-option.is-hi {
+  background: var(--panel-hover);
+}
+.res-option-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.res-option-source {
+  color: var(--faint);
+  font-size: 11px;
+}
+.res-option-desc {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.res-chip.is-unknown {
+  background: transparent;
+  outline: 1px dashed var(--box-border-hover);
+  outline-offset: -1px;
+  color: var(--muted);
+}
+.res-chip.res-subagent {
+  background: rgba(217, 89, 38, 0.16);
+}
+.wf-catalog {
+  line-height: 1.6;
+}
+
+/* 좁은 오른쪽 창에서도 옆으로 넘치지 않게 (칸이 줄어든다) */
+.step-props {
+  overflow-x: hidden;
+}
+.step-field {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+.res-row {
+  grid-template-columns: 74px minmax(0, 1fr);
+}
+.step-list-row > .step-input,
+.step-list-row > input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.res-input-wrap {
+  flex: 1 1 90px;
+  min-width: 80px;
+}

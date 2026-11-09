@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
+import type { Catalog } from '../src/workflow/catalog';
 import type { AiRequest, AiResponse, AiSettings, AiState, Diagnosis } from '../src/ai/protocol';
 
 type AttachResult = {
@@ -118,6 +119,8 @@ const api = {
   aiDiagnose: (): Promise<Diagnosis> => ipcRenderer.invoke('ai:diagnose'),
   aiClaudeRegister: (): Promise<{ ok: true; files: string[] } | { ok: false; error: string }> => ipcRenderer.invoke('ai:claude-register'),
   aiClaudeUnregister: (): Promise<{ ok: true; removed: number } | { ok: false; error: string }> => ipcRenderer.invoke('ai:claude-unregister'),
+  /** 이 PC에서 찾은 스킬·명령어·커넥터·서브 에이전트 (읽기만) */
+  catalogList: (workingDir: string | null, refresh = false): Promise<Catalog> => ipcRenderer.invoke('catalog:list', workingDir, refresh),
 
   onOpenPath: (callback: (filePath: string) => void) => {
     const listener = (_e: IpcRendererEvent, filePath: string) => callback(filePath);
