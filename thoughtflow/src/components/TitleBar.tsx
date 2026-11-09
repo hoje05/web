@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { alertUser, desktopApi, projectName, renameProject } from '../persistence/fileService';
 import { useStore } from '../store/store';
+import { useProgress } from '../workflow/useWorkflow';
 import { SparkIcon } from './AiToast';
 import { SaveStatus } from './SaveStatus';
 
@@ -16,6 +17,9 @@ export function TitleBar() {
   const setDrawer = useStore((s) => s.setDrawer);
   const aiOpen = useStore((s) => s.aiSettingsOpen);
   const setAiOpen = useStore((s) => s.setAiSettingsOpen);
+  const wfOpen = useStore((s) => s.workflowOpen);
+  const setWfOpen = useStore((s) => s.setWorkflowOpen);
+  const prog = useProgress();
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -43,6 +47,32 @@ export function TitleBar() {
       <div className="tb-spacer" />
       {desktopApi && (
         <div className="tb-controls" onMouseDown={(e) => e.preventDefault()}>
+          <button
+            className="tb-btn tb-ai tb-plan"
+            title="계획 (워크플로우)"
+            aria-pressed={wfOpen}
+            data-testid="workflow-button"
+            onClick={() => setWfOpen(!wfOpen)}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M2.5 4l1.5 1.5L6.5 3M2.5 11l1.5 1.5L6.5 10M9 4.5h4.5M9 11.5h4.5" />
+            </svg>
+            <span>계획</span>
+            {prog.total > 0 && (
+              <span className="tb-plan-progress" data-testid="workflow-progress">
+                {prog.done + prog.skipped}/{prog.total}
+              </span>
+            )}
+          </button>
           <button
             className="tb-btn tb-ai"
             title="AI 연결 (Claude · ChatGPT)"

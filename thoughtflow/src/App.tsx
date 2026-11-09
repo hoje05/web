@@ -10,6 +10,7 @@ import { SearchBar } from './components/SearchBar';
 import { SidePanel } from './components/SidePanel';
 import { TagManager } from './components/TagManager';
 import { TitleBar } from './components/TitleBar';
+import { WorkflowPanel } from './components/WorkflowPanel';
 import { Toolbar } from './components/Toolbar';
 import { ZoomControls } from './components/ZoomControls';
 import { loadNoteEditor } from './editor/LazyNoteEditor';
@@ -69,6 +70,7 @@ export function App() {
         <AttachmentPreview />
         <TagManager />
         <AiSettings />
+        <WorkflowPanel />
       </div>
     </div>
   );

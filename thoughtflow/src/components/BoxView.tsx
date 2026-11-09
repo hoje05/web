@@ -1,6 +1,8 @@
 import { memo, useEffect, useLayoutEffect, useRef } from 'react';
 import { neighborNode } from '../model/graph';
 import type { BoxNode } from '../model/types';
+import type { EffectiveStatus } from '../workflow/graph';
+import { STATUS_LABEL } from '../workflow/useWorkflow';
 import { useStore } from '../store/store';
 
 interface Props {
@@ -17,9 +19,11 @@ interface Props {
   active: boolean;
   /** AI가 방금 만든 Box (잠깐 빛남) */
   aiNew: boolean;
+  /** 계획 블록의 상태 (계획 블록이 아니면 null) */
+  stepStatus: EffectiveStatus | null;
 }
 
-export const BoxView = memo(function BoxView({ node, selected, editing, borderHover, dropTarget, search, active, aiNew }: Props) {
+export const BoxView = memo(function BoxView({ node, selected, editing, borderHover, dropTarget, search, active, aiNew, stepStatus }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   // 실제 렌더링 크기를 측정해 Doc에 반영 (Anchor 계산용). Undo 기록에는 남기지 않는다.
@@ -43,6 +47,7 @@ export const BoxView = memo(function BoxView({ node, selected, editing, borderHo
     search === 'dim' && 'is-search-dim',
     active && 'is-active-page',
     aiNew && 'is-ai-new',
+    stepStatus && `is-step step-${stepStatus}`,
   ]
     .filter(Boolean)
     .join(' ');
@@ -53,6 +58,7 @@ export const BoxView = memo(function BoxView({ node, selected, editing, borderHo
       className={className}
       data-node-id={node.id}
       data-testid="box"
+      data-step={stepStatus ?? undefined}
       style={{ transform: `translate(${node.x}px, ${node.y}px)` }}
     >
       {editing ? (
@@ -61,6 +67,12 @@ export const BoxView = memo(function BoxView({ node, selected, editing, borderHo
         <div key="view" className="box-text">
           {node.text || <span className="box-placeholder">내용 입력</span>}
         </div>
+      )}
+      {stepStatus && (
+        <span className="box-step-status" data-testid="box-step-status">
+          {node.step?.assignee === 'human' ? '사람 · ' : ''}
+          {STATUS_LABEL[stepStatus]}
+        </span>
       )}
       <BoxMeta node={node} />
       {node.note.trim() && <span className="box-note-mark" title="메모 있음" />}
@@ -84,7 +96,9 @@ function BoxMeta({ node }: { node: BoxNode }) {
   const tags = useStore((s) => s.doc.tags);
   const ids = (node.tagIds ?? []).filter((id) => tags?.[id]);
   const atts = node.attachments ?? [];
-  if (!ids.length && !atts.length) return null;
+  const res = node.step?.resources;
+  const tools = res ? res.skills.length + res.commands.length + res.connectors.length + (res.subagent ? 1 : 0) : 0;
+  if (!ids.length && !atts.length && !tools) return null;
   const images = atts.filter((a) => a.type === 'image').length;
   const files = atts.length - images;
   const more = ids.length - BOARD_TAGS;
@@ -98,6 +112,25 @@ function BoxMeta({ node }: { node: BoxNode }) {
       {more > 0 && (
         <span className="box-tag box-tag-more" title={ids.slice(BOARD_TAGS).map((id) => tags[id].name).join(', ')} data-testid="box-tag-more">
           +{more}
+        </span>
+      )}
+      {tools > 0 && res && (
+        <span
+          className="box-attach box-tools"
+          title={[
+            res.skills.length && `스킬: ${res.skills.join(', ')}`,
+            res.commands.length && `명령어: ${res.commands.join(', ')}`,
+            res.connectors.length && `커넥터: ${res.connectors.join(', ')}`,
+            res.subagent && `서브 에이전트: ${res.subagent.type}`,
+          ]
+            .filter(Boolean)
+            .join('\n')}
+          data-testid="box-tools"
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
+            <path d="M9.5 2.5a3.2 3.2 0 0 0-3 4.3L2.6 10.7a1.4 1.4 0 0 0 2 2l3.9-3.9a3.2 3.2 0 0 0 4.3-3L11 7.4 8.6 5l1.6-1.8a3.2 3.2 0 0 0-.7-.7Z" />
+          </svg>
+          {tools}
         </span>
       )}
       {images > 0 && (

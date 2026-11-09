@@ -263,7 +263,7 @@ interface Doc { …; workflow?: WorkflowMeta }
 | 단계 | 버전 | 내용 | 확인 |
 |---|---|---|---|
 | **1. 모델** ✅ | v0.11 | StepInfo·WorkflowMeta, 파일 형식 v4 + 예전 파일 읽기, docOps, `src/workflow/graph·transitions·resources` | 단위 테스트: 위상 정렬, ready 계산, 순환, 상태 규칙, v3→v4 |
-| **2. 화면** | v0.11 | StepProps(계획 블록 설정), 보드 상태 표시·ready 강조, 진행률, 계획 창(목록·설정·점검) | e2e: 블록 만들기·도구 고르기·상태 바꾸기·Undo·다시 열기 |
+| **2. 화면** ✅ | v0.11 | StepProps(계획 블록 설정), 보드 상태 표시·ready 강조, 진행률, 계획 창(목록·설정·점검) | e2e: 블록 만들기·도구 고르기·상태 바꾸기·Undo·다시 열기 |
 | **3. 카탈로그** | v0.12 | electron/catalog.ts, ResourcePicker 자동 완성, 직접 입력, "확인 안 됨" 표시 | 단위: SKILL.md·agents 앞부분 읽기 / e2e: 가짜 ~/.claude 폴더로 목록 |
 | **4. MCP 진행 도구** | v0.12 | get_plan·next_steps·start/finish/fail/log_step·request_approval·ask_user·propose_change·get_catalog·report_capabilities, 권한, run_plan 프롬프트, 지시문 | e2e: 실제 MCP 클라이언트로 3단계 계획을 끝까지 진행 / 순서 어김·결과물 누락·기준 실패·계획 수정 시도가 거부되는지 / 질문→답→이어서 진행 / 검토 대기 |
 | **5. Claude Code 연결** | v0.13 | Claude Code 등록·점검, "Claude로 진행하기" 명령 복사, 계획 → 스킬 만들기 | e2e: 가짜 홈 폴더에 등록 → 등록된 명령으로 실제 연결 (phase24 방식) |
@@ -323,3 +323,10 @@ tests/workflow*.test.ts, e2e/phase27~31.mjs
 - `src/workflow/fileData.ts` + `fileFormat.ts`: 파일 형식 v4 (예전 파일 그대로 열림, 손상된 계획 값은 고쳐 읽음)
 - 테스트: `tests/workflow.test.ts`
 - 화면은 아직 없다 (2단계). 저장 형식이 v4가 되므로 2단계와 함께 배포한다.
+
+### 2단계 (화면) — 완료 (v0.11.0)
+- 오른쪽 창 `StepProps`: 계획 블록 만들기/풀기, 상태 칩·직접 바꾸기, 승인·질문 답하기·검토, 할 일·완료 기준·만들 것·참고·진행 방법·도구(스킬·명령어·커넥터·서브 에이전트·하지 말 것), 계획 대비 결과, 질문과 답, 진행 기록, 접기
+- 보드: 상태 띠·글자, ready 강조, 막힘 점선, 도구 개수 / 프로그램 바: 계획 버튼 + 진행률 / Box 우클릭: 계획 블록으로 만들기·풀기 / 메뉴 보기 → 계획
+- 계획 창 `WorkflowPanel`: 목표·작업 폴더·잠금·동시 진행 수·AI 권한·기본 도구·수정 제안·단계 목록·계획 점검(`src/workflow/check.ts`)
+- 도구 이름은 아직 직접 입력 (자동 완성 목록은 3단계)
+- e2e: `e2e/phase27.mjs`

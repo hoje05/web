@@ -23,7 +23,8 @@ export type Command =
   | 'zoomFit'
   | 'arrange'
   | 'tagManager'
-  | 'aiSettings';
+  | 'aiSettings'
+  | 'workflow';
 
 export function runCommand(command: string) {
   const s = useStore.getState();
@@ -67,5 +68,8 @@ export function runCommand(command: string) {
       return s.setTagManagerOpen(true);
     case 'aiSettings':
       return s.setAiSettingsOpen(true);
+    case 'workflow':
+      flushEditing();
+      return s.setWorkflowOpen(true);
   }
 }

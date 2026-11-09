@@ -3327,3 +3327,612 @@ svg.layer {
   font-weight: 500;
   text-align: left;
 }
+
+/* ───────────── 계획 (워크플로우) ───────────── */
+
+:root {
+  --st-ready: #22c55e;
+  --st-running: #3987e5;
+  --st-wait: #e0a526;
+  --st-done: #4b9e78;
+  --st-failed: #f87171;
+  --st-muted: #6b7079;
+}
+
+/* Board: 계획 블록은 왼쪽 띠 + 상태 글자 */
+.box.is-step {
+  border-left: 3px solid var(--st-muted);
+  padding-top: 20px;
+}
+.box.step-ready {
+  border-left-color: var(--st-ready);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35), var(--shadow-sm);
+}
+.box.step-running {
+  border-left-color: var(--st-running);
+  animation: step-pulse 2.4s ease-in-out infinite;
+}
+.box.step-waiting,
+.box.step-asking,
+.box.step-review {
+  border-left-color: var(--st-wait);
+}
+.box.step-done {
+  border-left-color: var(--st-done);
+  opacity: 0.72;
+}
+.box.step-failed {
+  border-left-color: var(--st-failed);
+}
+.box.step-blocked {
+  border-style: dashed;
+  border-left-style: solid;
+}
+.box.step-skipped {
+  opacity: 0.5;
+}
+@keyframes step-pulse {
+  50% {
+    box-shadow: 0 0 0 3px rgba(57, 135, 229, 0.28), var(--shadow-sm);
+  }
+}
+
+.box-step-status {
+  position: absolute;
+  top: 5px;
+  left: 12px;
+  font-size: 10.5px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--st-muted);
+  pointer-events: none;
+}
+.step-ready .box-step-status {
+  color: var(--st-ready);
+}
+.step-running .box-step-status {
+  color: var(--st-running);
+}
+.step-waiting .box-step-status,
+.step-asking .box-step-status,
+.step-review .box-step-status {
+  color: var(--st-wait);
+}
+.step-done .box-step-status {
+  color: var(--st-done);
+}
+.step-failed .box-step-status {
+  color: var(--st-failed);
+}
+
+/* 상태 칩 (오른쪽 창 · 계획 창) */
+.step-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  background: var(--panel-hover);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.step-status.st-ready {
+  color: var(--st-ready);
+  background: rgba(34, 197, 94, 0.12);
+}
+.step-status.st-running {
+  color: #8db8f2;
+  background: rgba(57, 135, 229, 0.16);
+}
+.step-status.st-waiting,
+.step-status.st-asking,
+.step-status.st-review {
+  color: #f0c060;
+  background: rgba(224, 165, 38, 0.14);
+}
+.step-status.st-done {
+  color: #7fcaa5;
+  background: rgba(75, 158, 120, 0.15);
+}
+.step-status.st-failed {
+  color: var(--st-failed);
+  background: rgba(248, 113, 113, 0.13);
+}
+
+/* 오른쪽 창: 계획 블록 설정 */
+.step-props {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 46%;
+  overflow-y: auto;
+  flex-shrink: 0;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  font-size: 12px;
+  scrollbar-width: thin;
+}
+.step-props.is-collapsed {
+  gap: 6px;
+}
+.step-props.is-off {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 10px;
+  background: transparent;
+  border-style: dashed;
+}
+.step-enable,
+.step-disable {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.step-enable:hover {
+  color: var(--ink);
+  background: var(--panel-hover);
+}
+.step-disable {
+  align-self: flex-start;
+  color: var(--faint);
+  font-size: 11px;
+}
+.step-disable:hover:not(:disabled) {
+  color: var(--danger);
+}
+.step-hint {
+  color: var(--faint);
+  font-size: 11.5px;
+  margin: 0;
+}
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.step-collapse {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  width: 18px;
+  padding: 0;
+}
+.step-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+.step-status-select {
+  margin-left: auto;
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 4px;
+}
+.step-error,
+.step-warn {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(248, 113, 113, 0.1);
+  color: #fca5a5;
+  white-space: pre-line;
+}
+.step-warn {
+  background: rgba(224, 165, 38, 0.1);
+  color: #f0c060;
+}
+.step-locked {
+  color: var(--faint);
+  font-size: 11px;
+}
+.step-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: rgba(224, 165, 38, 0.1);
+  color: #f3d58c;
+}
+.step-action.is-question {
+  flex-direction: column;
+  align-items: stretch;
+}
+.step-action button,
+.wf-proposal-actions button {
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 6px;
+  font: inherit;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.step-action button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.step-action .step-primary {
+  background: var(--st-running);
+  border-color: var(--st-running);
+  color: #fff;
+}
+.step-field {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 6px;
+  align-items: start;
+}
+.step-label {
+  color: var(--muted);
+  font-size: 11.5px;
+  padding-top: 4px;
+}
+.step-value {
+  min-width: 0;
+}
+.step-input {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 7px;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  font: inherit;
+  resize: vertical;
+}
+.step-input:focus {
+  outline: none;
+  border-color: var(--box-border-hover);
+}
+.step-input:disabled {
+  color: var(--muted);
+  background: transparent;
+}
+.step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.step-list-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.step-deliv-row .step-input:first-of-type {
+  flex: 0 0 38%;
+}
+.step-num {
+  flex: 0 0 auto;
+  width: 16px;
+  text-align: right;
+  color: var(--faint);
+  font-size: 11px;
+}
+.step-add {
+  border-style: dashed;
+  background: transparent;
+}
+.step-x {
+  border: 0;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 3px;
+}
+.step-x:hover {
+  color: var(--danger);
+}
+.step-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.step-seg {
+  display: inline-flex;
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.step-seg button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.step-seg button.is-on {
+  background: var(--panel-hover);
+  color: var(--ink);
+}
+.step-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.step-check select {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--panel-border);
+  border-radius: 5px;
+  font: inherit;
+}
+.step-muted {
+  color: var(--faint);
+}
+.step-q {
+  color: #f3d58c;
+}
+.step-a {
+  color: var(--muted);
+}
+.step-qa {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.step-log summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.step-log ol {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  color: var(--muted);
+}
+.step-log-time {
+  color: var(--faint);
+}
+.step-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: var(--panel);
+}
+.step-result-by {
+  color: var(--faint);
+  margin-left: 6px;
+}
+.step-result-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step-result-list .is-ok {
+  color: #7fcaa5;
+}
+.step-result-list .is-missing {
+  color: #fca5a5;
+}
+
+/* 도구 고르기 */
+.res-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.res-row {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 6px;
+  align-items: start;
+}
+.res-label {
+  color: var(--faint);
+  font-size: 11px;
+  padding-top: 4px;
+}
+.res-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.res-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 4px 1px 8px;
+  border-radius: 999px;
+  background: var(--panel-hover);
+  color: var(--ink);
+  font-size: 11.5px;
+}
+.res-chip.res-skill {
+  background: rgba(57, 135, 229, 0.16);
+}
+.res-chip.res-command {
+  background: rgba(144, 133, 233, 0.17);
+  font-family: Consolas, 'D2Coding', monospace;
+}
+.res-chip.res-connector {
+  background: rgba(25, 158, 112, 0.16);
+}
+.res-chip button {
+  border: 0;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+  padding: 0 3px;
+}
+.res-input {
+  flex: 1 1 110px;
+  min-width: 100px;
+  padding: 2px 7px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px dashed var(--panel-border);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 11.5px;
+}
+.res-input:focus {
+  outline: none;
+  border-color: var(--box-border-hover);
+}
+.res-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.box-tools {
+  color: #8db8f2;
+}
+
+/* 프로그램 바 */
+.tb-plan-progress {
+  margin-left: 2px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--panel-hover);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* 계획 창 */
+.workflow-panel {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(640px, calc(100% - 32px));
+  max-height: calc(100% - 56px);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+  font-size: 13px;
+  line-height: 1.5;
+  z-index: 40;
+  animation: ai-pop 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.wf-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 10px 18px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.wf-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.wf-progress {
+  color: var(--muted);
+  font-size: 12px;
+}
+.wf-close {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+.wf-body {
+  overflow-y: auto;
+  padding: 6px 18px 16px;
+  scrollbar-width: thin;
+}
+.wf-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+.wf-section:last-child {
+  border-bottom: 0;
+}
+.wf-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.wf-steps {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--faint);
+}
+.wf-step button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.wf-step button:hover {
+  background: var(--panel-hover);
+}
+.wf-step.step-done .wf-step-name {
+  color: var(--muted);
+}
+.wf-issues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.wf-issue.is-error {
+  color: #fca5a5;
+}
+.wf-issue.is-warn {
+  color: #f0c060;
+}
+.wf-issue.is-info {
+  color: var(--muted);
+}
+.wf-issue .ai-link {
+  margin-left: 6px;
+}
+.wf-proposal {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wf-proposal-actions {
+  display: flex;
+  gap: 6px;
+}

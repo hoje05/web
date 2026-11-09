@@ -306,3 +306,19 @@ describe('workflow file format (v4)', () => {
     expect(fixed.workflow!.proposals[0].stepId).toBeUndefined();
   });
 });
+
+describe('plan check', () => {
+  it('lists what would stop or weaken the plan', async () => {
+    const { planIssues } = await import('../src/workflow/check');
+    expect(planIssues(docOf([box('n', 0)]))).toEqual([]);
+    let d = docOf([box('a', 0, 0, { goal: '' }), box('b', 300, 0, {}), box('c', 600, 0, {})], [route('1', 'a', 'b'), route('2', 'b', 'a')]);
+    d = okDoc(askUser(okDoc(startStep(okDoc(setStatusByHuman(d, 'c', 'todo')), 'c', 'Claude', AT)), 'c', 'Claude', '색은?', AT, 'q'));
+    d = okDoc(proposeChange(d, 'Claude', { change: 'x', why: '' }, AT, 'p'));
+    const issues = planIssues(d).map((i) => `${i.level}:${i.stepId ?? '-'}:${i.text.slice(0, 12)}`);
+    expect(issues[0]).toMatch(/^error:a:순서가 돌고 돕니다/);
+    expect(issues).toContain('warn:-:계획 전체 목표가 비어');
+    expect(planIssues(d).some((i) => i.stepId === 'c' && i.text.includes('색은?'))).toBe(true);
+    expect(planIssues(d).some((i) => i.level === 'warn' && i.text.includes('완료 기준이 없어'))).toBe(true);
+    expect(planIssues(d).at(-1)?.text).toContain('수정 제안 1개');
+  });
+});

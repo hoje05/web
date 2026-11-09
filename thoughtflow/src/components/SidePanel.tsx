@@ -4,6 +4,7 @@ import { LazyNoteEditor } from '../editor/LazyNoteEditor';
 import type { NoteEditorHandle } from '../editor/NoteEditor';
 import { attachFiles, filesOf, hasFiles, importNoteImages } from '../persistence/attachments';
 import { BoxProps } from './BoxProps';
+import { StepProps } from './StepProps';
 import { incomingEdges, outgoingEdges } from '../model/graph';
 import type { BoxNode, Doc } from '../model/types';
 import { isActiveSession, setActiveSession } from '../interaction/editSession';
@@ -284,6 +285,7 @@ function PageEditor({ node, query }: { node: BoxNode; query: string }) {
         }}
       />
       <BoxProps node={node} />
+      <StepProps node={node} />
       {(incoming.length > 0 || outgoing.length > 0) && (
         <div className="panel-flow">
           {incoming.length > 0 && (

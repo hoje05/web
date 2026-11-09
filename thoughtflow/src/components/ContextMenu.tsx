@@ -1,5 +1,8 @@
 import { useEffect } from 'react';
+import { alertUser } from '../persistence/fileService';
 import { useStore } from '../store/store';
+import { setStepEnabled } from '../workflow/transitions';
+import { applyPlan } from '../workflow/useWorkflow';
 
 /** Box·Route 우클릭 메뉴 */
 export function ContextMenu() {
@@ -23,6 +26,8 @@ export function ContextMenu() {
 
   if (!menu) return null;
   const label = menu.target === 'node' ? 'Box 삭제' : 'Route 삭제';
+  const sel = useStore.getState().selection;
+  const node = menu.target === 'node' && sel?.kind === 'node' ? useStore.getState().doc.nodes[sel.id] : undefined;
   return (
     <>
       <div
@@ -33,7 +38,43 @@ export function ContextMenu() {
           setMenu(null);
         }}
       />
-      <div className="context-menu" role="menu" style={{ left: Math.min(menu.x, board.width - 180), top: Math.min(menu.y, board.height - 52) }} data-testid="context-menu">
+      <div
+        className="context-menu"
+        role="menu"
+        style={{
+          left: Math.min(menu.x, board.width - 200),
+          top: Math.min(menu.y, board.height - (node ? 90 : 52)),
+        }}
+        data-testid="context-menu"
+      >
+        {node && (
+          <button
+            role="menuitem"
+            className="context-item"
+            data-testid="context-step"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setMenu(null);
+              const problem = applyPlan((d) => setStepEnabled(d, node.id, !node.step));
+              if (problem) void alertUser(problem);
+              else useStore.getState().openPage(node.id, { force: true });
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M2.5 4l1.5 1.5L6.5 3M2.5 11l1.5 1.5L6.5 10M9 4.5h4.5M9 11.5h4.5" />
+            </svg>
+            <span>{node.step ? '계획 블록 풀기' : '계획 블록으로 만들기'}</span>
+          </button>
+        )}
         <button
           role="menuitem"
           className="context-item danger"

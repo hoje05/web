@@ -126,6 +126,7 @@ function buildMenu() {
         item('전체 보기', 'zoomFit', 'Shift+1'),
         { type: 'separator' },
         item('정렬 (누를 때마다 → 나가는 흐름 / ← 들어오는 흐름 중심)', 'arrange'),
+        item('계획 (워크플로우)…', 'workflow'),
         ...(app.isPackaged
           ? []
           : ([{ type: 'separator' }, { label: '개발자 도구', role: 'toggleDevTools' }] as MenuItemConstructorOptions[])),

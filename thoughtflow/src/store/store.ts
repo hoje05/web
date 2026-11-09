@@ -74,6 +74,9 @@ export interface AppState extends History {
   setPreview: (preview: AppState['preview']) => void;
   tagManagerOpen: boolean;
   setTagManagerOpen: (open: boolean) => void;
+  /** 계획 창 (계획 설정 · 단계 목록 · 점검 · 수정 제안) */
+  workflowOpen: boolean;
+  setWorkflowOpen: (open: boolean) => void;
 
   // ── 프로젝트 창 (왼쪽에서 스르륵) ──
   drawerOpen: boolean;
@@ -181,6 +184,8 @@ export const useStore = create<AppState>()((set, get) => ({
   setPreview: (preview) => set({ preview }),
   tagManagerOpen: false,
   setTagManagerOpen: (tagManagerOpen) => set({ tagManagerOpen }),
+  workflowOpen: false,
+  setWorkflowOpen: (workflowOpen) => set({ workflowOpen }),
 
   commit: (next) =>
     set((s) => (next === s.doc ? {} : { doc: next, past: pushPast(s.past, s.doc), future: [] })),

@@ -6,6 +6,7 @@ import { attachFiles, filesOf, hasFiles } from '../persistence/attachments';
 import { screenToWorld } from '../viewport/viewport';
 import { getRouteGeometry } from '../routing/routeGeometry';
 import { nodeMatches, useStore } from '../store/store';
+import { useStepStatuses } from '../workflow/useWorkflow';
 import { BoxView } from './BoxView';
 import { DraftRoute } from './DraftRoute';
 import { routeRole, type RouteRole } from './highlight';
@@ -46,6 +47,7 @@ export function Board() {
   const searchQuery = useStore((s) => (s.searchOpen ? s.searchQuery.trim() : ''));
   const activePage = useStore((s) => (s.panelOpen ? s.activeTab : null));
   const aiFlash = useStore((s) => s.aiFlash);
+  const stepStatuses = useStepStatuses();
   useBoardInteraction(boardRef);
   /** 파일을 끌고 있는 아래의 Box (놓으면 그 Box에 첨부) */
   const [fileDrop, setFileDrop] = useState<string | null>(null);
@@ -135,6 +137,7 @@ export function Board() {
             search={searchQuery ? (nodeMatches(n, searchQuery) ? 'match' : 'dim') : null}
             active={activePage === n.id}
             aiNew={aiFlash.includes(n.id)}
+            stepStatus={stepStatuses.get(n.id) ?? null}
           />
         ))}
         {ghost && (
