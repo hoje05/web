@@ -11,6 +11,7 @@ import { addEdge, addNode, removeEdge, removeNode, updateNode } from '../model/d
 import { incomingEdges, outgoingEdges } from '../model/graph';
 import { newId } from '../model/ids';
 import type { BoxNode, Doc, RouteEdge } from '../model/types';
+import { statusName } from '../workflow/transitions';
 import { estimateBoxSize, placeBoxes, type PlaceRequest } from './layout';
 import type { AddFlowArgs, FlowRouteInput } from './protocol';
 
@@ -22,6 +23,14 @@ export const MAX_NOTE = 20000;
 export type OpResult = { ok: true; doc: Doc; text: string; created?: string[] } | { ok: false; error: string };
 
 const fail = (error: string): OpResult => ({ ok: false, error });
+
+/**
+ * 계획 블록(사람이 설계한 계획)은 AI가 보드 도구로 고치거나 지우지 못한다.
+ * 진행 상태·결과는 계획 도구(start_step, finish_step …)로만 적고, 계획을 바꾸고 싶으면 propose_change로 제안한다.
+ */
+const PLAN_PROTECTED = '계획 블록은 사용자만 고칩니다. 진행 기록은 log_step, 계획을 바꾸자는 의견은 propose_change로 남겨 주세요.';
+const PLAN_ORDER_PROTECTED = '계획 블록끼리의 Route는 진행 순서라서 사용자만 바꿉니다. 순서를 바꾸자는 의견은 propose_change로 남겨 주세요.';
+const isPlanBlock = (doc: Doc, id: string) => !!doc.nodes[id]?.step;
 
 // ───────────── 보드 → 글 ─────────────
 
@@ -52,6 +61,8 @@ export function describeBoard(doc: Doc, opts: DescribeOptions): string {
   const head = [`프로젝트: ${opts.projectName}`, `Box ${nodes.length}개 · Route ${edges.length}개 (→ 는 흐름 방향)`];
   if (opts.focusId && doc.nodes[opts.focusId]) head.push(`사용자가 지금 보고 있는 Box: ${boxLabel(doc.nodes[opts.focusId])}`);
   if (!nodes.length) return [...head, '', '보드가 비어 있습니다.'].join('\n');
+  const planCount = nodes.filter((n) => n.step).length;
+  if (planCount) head.push(`계획 블록 ${planCount}개 — 계획의 자세한 내용과 진행 순서는 get_plan으로 읽으세요.`);
 
   const out = [...head, '', '[흐름]'];
   const seen = new Set<string>();
@@ -61,7 +72,7 @@ export function describeBoard(doc: Doc, opts: DescribeOptions): string {
       .filter(Boolean)
       .sort(byPosition);
   const noteMark = (n: BoxNode) =>
-    `${tagMark(doc, n)}${n.note.trim() && !opts.includeNotes ? ' (메모 있음)' : ''}${n.attachments?.length ? ` (첨부 ${n.attachments.length}개)` : ''}`;
+    `${n.step ? ` [계획 블록 · ${statusName(n.step.status)}]` : ''}${tagMark(doc, n)}${n.note.trim() && !opts.includeNotes ? ' (메모 있음)' : ''}${n.attachments?.length ? ` (첨부 ${n.attachments.length}개)` : ''}`;
 
   const walk = (n: BoxNode, depth: number) => {
     const indent = '  '.repeat(depth);
@@ -230,6 +241,7 @@ export function addFlow(doc: Doc, args: AddFlowArgs, origin: string, center: Vec
     const b = resolve(r?.to);
     if (isErr(b)) return fail(`routes의 to: ${b.error}`);
     if (a === b) return fail(`같은 Box끼리는 이을 수 없습니다: '${r.from}'`);
+    if (isPlanBlock(doc, a) && isPlanBlock(doc, b)) return fail(PLAN_ORDER_PROTECTED);
     pairs.push([a, b]);
   }
   if (args.after !== undefined && args.after !== null && String(args.after).trim()) {
@@ -298,6 +310,7 @@ export function updateBox(
 ): OpResult {
   const n = resolveBox(doc, args.id);
   if (isErr(n)) return fail(n.error);
+  if (n.step) return fail(`${boxLabel(n)}: ${PLAN_PROTECTED}`);
   const patch: Partial<BoxNode> = {};
   if (typeof args.title === 'string') {
     const t = cleanTitle(args.title);
@@ -322,6 +335,7 @@ export function connectBoxes(doc: Doc, from: string, to: string): OpResult {
   const b = resolveBox(doc, to);
   if (isErr(b)) return fail(`to: ${b.error}`);
   if (a.id === b.id) return fail('같은 Box끼리는 이을 수 없습니다.');
+  if (a.step && b.step && !hasEdge(doc, a.id, b.id)) return fail(PLAN_ORDER_PROTECTED);
   if (hasEdge(doc, a.id, b.id)) return { ok: true, doc, text: `이미 이어져 있습니다: ${boxLabel(a)} → ${boxLabel(b)}` };
   const next = addEdge(doc, makeAutoEdge(doc, a.id, b.id));
   return { ok: true, doc: next, text: `이었습니다: ${boxLabel(a)} → ${boxLabel(b)}`, created: [] };
@@ -341,12 +355,14 @@ export function deleteItems(doc: Doc, args: { box_ids?: string[]; routes?: FlowR
     if (isErr(b)) return fail(`routes의 to: ${b.error}`);
     const edge = Object.values(next.edges).find((e) => e.sourceNodeId === a.id && e.targetNodeId === b.id);
     if (!edge) return fail(`${boxLabel(a)} → ${boxLabel(b)} Route가 없습니다.`);
+    if (a.step && b.step) return fail(PLAN_ORDER_PROTECTED);
     next = removeEdge(next, edge.id);
     routeCount++;
   }
   for (const ref of boxIds) {
     const n = resolveBox(doc, ref);
     if (isErr(n)) return fail(n.error);
+    if (n.step) return fail(`${boxLabel(n)}: ${PLAN_PROTECTED}`);
     if (!next.nodes[n.id]) continue;
     routeCount += Object.values(next.edges).filter((e) => e.sourceNodeId === n.id || e.targetNodeId === n.id).length;
     next = removeNode(next, n.id);

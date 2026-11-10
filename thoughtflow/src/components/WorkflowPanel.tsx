@@ -228,11 +228,13 @@ export function WorkflowPanel() {
 /** 이 PC에서 찾은 도구 개수 + 다시 찾기 (스킬을 새로 설치했을 때) */
 function CatalogSummary() {
   const { catalog, loading, refresh } = useCatalog();
-  const count = (k: string) => catalog.items.filter((i) => i.kind === k && i.source !== 'builtin').length;
+  const count = (k: string) => catalog.items.filter((i) => i.kind === k && i.source !== 'builtin' && i.source !== 'claude').length;
+  const told = catalog.items.filter((i) => i.source === 'claude').length;
   return (
     <p className="step-hint wf-catalog" data-testid="wf-catalog">
       이 PC에서 찾은 도구: 스킬 {count('skill')} · 명령어 {count('command')} · 커넥터 {count('connector')} · 서브 에이전트 {count('subagent')}
-      {catalog.workingDir ? ' (작업 폴더 포함)' : ''}{' '}
+      {catalog.workingDir ? ' (작업 폴더 포함)' : ''}
+      {told ? ` · Claude가 알려 준 도구 ${told}` : ''}{' '}
       <button className="ai-link" disabled={loading} data-testid="wf-catalog-refresh" onClick={refresh}>
         {loading ? '찾는 중…' : '다시 찾기'}
       </button>

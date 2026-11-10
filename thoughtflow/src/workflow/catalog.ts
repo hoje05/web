@@ -10,8 +10,8 @@ export interface CatalogItem {
   /** 계획에 적을 이름 (명령어는 "/"로 시작, 플러그인 것은 "플러그인:이름") */
   name: string;
   description: string;
-  /** 어디서 찾았나: 사용자 폴더 · 작업 폴더 · 플러그인 · Claude 데스크톱 설정 · 기본 제공 */
-  source: 'user' | 'project' | 'plugin' | 'desktop' | 'builtin';
+  /** 어디서 찾았나: 사용자 폴더 · 작업 폴더 · 플러그인 · Claude 데스크톱 설정 · 기본 제공 · Claude가 알려 줌(report_capabilities) */
+  source: 'user' | 'project' | 'plugin' | 'desktop' | 'builtin' | 'claude';
   /** 플러그인 이름 등 짧은 설명 */
   where?: string;
 }
@@ -29,6 +29,7 @@ export const SOURCE_LABEL: Record<CatalogItem['source'], string> = {
   plugin: '플러그인',
   desktop: 'Claude 데스크톱',
   builtin: '기본 제공',
+  claude: 'Claude가 알려 줌',
 };
 
 /** Claude Code에 기본으로 있는 서브 에이전트 */
@@ -96,9 +97,9 @@ export function searchCatalog(items: CatalogItem[], kind: ResourceKind, query: s
 /** 목록에 있는 이름인가 */
 export const findInCatalog = (items: CatalogItem[], kind: ResourceKind, name: string) => items.find((it) => it.kind === kind && sameName(it.name, name));
 
-/** 같은 종류·이름은 하나만 (작업 폴더 > 사용자 > 플러그인 > 데스크톱 > 기본 순서로 남긴다) */
+/** 같은 종류·이름은 하나만 (작업 폴더 > 사용자 > 플러그인 > 데스크톱 > 기본 > Claude가 알려 준 것 순서로 남긴다) */
 export function dedupeCatalog(items: CatalogItem[]): CatalogItem[] {
-  const order: CatalogItem['source'][] = ['project', 'user', 'plugin', 'desktop', 'builtin'];
+  const order: CatalogItem['source'][] = ['project', 'user', 'plugin', 'desktop', 'builtin', 'claude'];
   const out: CatalogItem[] = [];
   for (const it of [...items].sort((a, b) => order.indexOf(a.source) - order.indexOf(b.source))) {
     if (!out.some((o) => o.kind === it.kind && sameName(o.name, it.name))) out.push(it);

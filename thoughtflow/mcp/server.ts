@@ -35,7 +35,16 @@ How to use it well:
   Use plain numbers (no thousands separators unless the cell is quoted). Prefer append_note to add a chart below the user's writing.
 - Pictures in notes appear as lines like ![설명](assets/…png). Keep these lines exactly as they are when you rewrite a note; you cannot add new pictures yourself (the user adds them in the app).
 - Never delete or rewrite the user's own content unless they ask. Deleting only works if the user allowed it in ThoughtFlow's AI settings.
-- After changing the board, briefly tell the user what you added or changed. The user can undo any change with Ctrl+Z in ThoughtFlow.`;
+- After changing the board, briefly tell the user what you added or changed. The user can undo any change with Ctrl+Z in ThoughtFlow.
+
+Plans (워크플로우): some boxes are "plan blocks" (get_board marks them [계획 블록 · 상태]). Together they form a plan the USER designed for you to carry out exactly. The user's goal is that you build what they planned, the way they planned it.
+- Read the plan with get_plan, pick the next step with next_steps, call start_step to begin it — it returns that step's work order: what to do, the done-when checklist, the deliverables, references, and the skills / slash commands / connectors / sub-agent to use and how.
+- Do exactly what the work order says: make only the listed deliverables, follow the references, use the listed tools (a skill → the Skill tool; a command → run that slash command; a connector → that MCP server's tools; a sub-agent → the Agent tool with that subagent_type) and nothing on the "하지 말 것" list.
+- You cannot create or edit the plan. update_box, delete_items, connect_boxes and add_flow refuse to change plan blocks or the routes between them. If the plan looks wrong or incomplete, call propose_change and keep following the plan (or ask_user and wait).
+- When a decision is not covered by the plan, call ask_user and wait for the answer instead of guessing. Record progress notes with log_step.
+- Steps that need approval: call request_approval and wait. Steps assigned to a person: wait until the user finishes them. Steps with review: after finish_step, wait until the user accepts the review.
+- Finish with finish_step: report where each deliverable was made, check every done-when item yourself with concrete evidence (pass true/false), and list the tools you actually used. If a criterion fails, keep working or call fail_step with the reason. Never mark something passed that you did not verify.
+- At the start of a plan, call report_capabilities with the names of the skills, slash commands, connectors (MCP servers) and sub-agents you actually have, so missing tools are found before work starts.`;
 
 const boxRef = (what: string) =>
   z.string().min(1).describe(`${what}: a box id such as "n_abc123" from get_board (an exact, unique box title also works)`);
@@ -218,6 +227,196 @@ Example: {"name":"제주도 여행","boxes":[{"key":"a","title":"여행 가고 �
       annotations: additive,
     },
     run('create_project'),
+  );
+
+  // ───────────── 계획 진행 ─────────────
+
+  const stepRef = z.string().min(1).describe('The plan block (step): its box id from get_plan (an exact, unique title also works)');
+  const toolLists = {
+    skills: z.array(z.string().min(1)).max(300).optional().describe('Skill names, e.g. "dataviz", "my-plugin:release-check"'),
+    commands: z.array(z.string().min(1)).max(300).optional().describe('Slash commands, e.g. "/review"'),
+    connectors: z.array(z.string().min(1)).max(300).optional().describe('Connector / MCP server names, e.g. "github", "Gmail"'),
+  };
+  const planWrite = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
+
+  server.registerTool(
+    'get_plan',
+    {
+      title: '계획 읽기',
+      description:
+        "Read the user's plan on the open board: overall goal, working folder, permissions, progress, the steps in run order with every instruction (task, done-when checklist, deliverables, references, tools, design note), results, questions and answers. With id, returns that one step's work order instead (use it to check for answers to your questions).",
+      inputSchema: { id: z.string().optional().describe('Optional: a step id to read only that step') },
+      annotations: readOnly,
+    },
+    run('get_plan'),
+  );
+
+  server.registerTool(
+    'next_steps',
+    {
+      title: '다음 단계',
+      description: 'List the plan steps you can start now, in order. If none, explains what the plan is waiting for (your running step, an answer, an approval, a review, a person, a failure) or that the plan is complete.',
+      inputSchema: {},
+      annotations: readOnly,
+    },
+    run('next_steps'),
+  );
+
+  server.registerTool(
+    'start_step',
+    {
+      title: '단계 시작',
+      description:
+        "Mark a step as running and get its full work order. Refused if earlier steps are not finished, the step is the user's own, it needs approval first, or too many steps are already running.",
+      inputSchema: { id: stepRef },
+      annotations: { ...planWrite, idempotentHint: true },
+    },
+    run('start_step'),
+  );
+
+  server.registerTool(
+    'request_approval',
+    {
+      title: '시작 승인 요청',
+      description: 'Ask the user to approve starting a step that requires approval. Then wait; once approved it appears in next_steps again.',
+      inputSchema: { id: stepRef, why: z.string().optional().describe('What you are about to do in this step (shown to the user)') },
+      annotations: { ...planWrite, idempotentHint: true },
+    },
+    run('request_approval'),
+  );
+
+  server.registerTool(
+    'log_step',
+    {
+      title: '진행 기록',
+      description: 'Add a short progress note to a running step (shown in its history). Does not change the plan.',
+      inputSchema: { id: stepRef, note: z.string().min(1).max(2000).describe('What you did or found') },
+      annotations: planWrite,
+    },
+    run('log_step'),
+  );
+
+  server.registerTool(
+    'ask_user',
+    {
+      title: '사용자에게 묻기',
+      description:
+        "Ask the user a question about a running step when the plan does not decide something. The step waits ('질문 중') until the user answers in ThoughtFlow; read the answer with get_plan(id). Do not guess instead.",
+      inputSchema: { id: stepRef, question: z.string().min(1).max(4000).describe('The question, with the options you see if any') },
+      annotations: planWrite,
+    },
+    run('ask_user'),
+  );
+
+  server.registerTool(
+    'finish_step',
+    {
+      title: '단계 끝내기',
+      description: `Report a step as finished. ThoughtFlow checks the report against the plan and refuses it unless:
+- every deliverable (numbered from 1 in the work order) has the place where you made it,
+- every done-when item (numbered from 1) is reported with pass=true and concrete evidence you verified,
+- "used" lists the tools you actually used (empty lists if none).
+Steps with review then wait for the user's review; others become done.
+Example: {"id":"n_abc","summary":"보고서 초안 작성","outputs":[{"deliverable":1,"path":"docs/report.md"}],"criteria":[{"item":1,"pass":true,"evidence":"표 3개, 그래프 2개 포함 확인"}],"used":{"skills":["report-writer"],"commands":[],"connectors":[]}}`,
+      inputSchema: {
+        id: stepRef,
+        summary: z.string().min(1).max(4000).describe('What you did, briefly'),
+        outputs: z
+          .array(z.object({ deliverable: z.number().int().min(1), path: z.string().min(1).describe('File path, URL or place where it was made') }))
+          .max(50)
+          .describe('One entry per deliverable'),
+        criteria: z
+          .array(z.object({ item: z.number().int().min(1), pass: z.boolean(), evidence: z.string().describe('How you verified it') }))
+          .max(50)
+          .describe('One entry per done-when item'),
+        used: z
+          .object({
+            ...toolLists,
+            subagent: z.object({ type: z.string().min(1), model: z.string().optional() }).optional().describe('Sub-agent you used, if any'),
+          })
+          .describe('Tools you actually used in this step'),
+      },
+      annotations: planWrite,
+    },
+    run('finish_step'),
+  );
+
+  server.registerTool(
+    'fail_step',
+    {
+      title: '단계 실패',
+      description: 'Mark a step as failed with the reason (e.g. a done-when item cannot be met). Later steps stay blocked until the user decides to redo or skip it.',
+      inputSchema: { id: stepRef, reason: z.string().min(1).max(2000) },
+      annotations: planWrite,
+    },
+    run('fail_step'),
+  );
+
+  server.registerTool(
+    'propose_change',
+    {
+      title: '계획 수정 제안',
+      description: 'Suggest a change to the plan (it stays unchanged until the user edits it). Use it when the plan looks wrong, incomplete or impossible.',
+      inputSchema: {
+        step_id: z.string().optional().describe('The step it is about, if any'),
+        change: z.string().min(1).max(4000).describe('What should change'),
+        why: z.string().max(2000).optional().describe('Why'),
+      },
+      annotations: planWrite,
+    },
+    run('propose_change'),
+  );
+
+  server.registerTool(
+    'get_catalog',
+    {
+      title: '도구 목록',
+      description: "List the skills, slash commands, connectors (MCP servers) and sub-agents ThoughtFlow found on this PC (user folder, the plan's working folder, plugins, Claude Desktop settings).",
+      inputSchema: { kind: z.enum(['skill', 'command', 'connector', 'subagent']).optional().describe('Only this kind') },
+      annotations: readOnly,
+    },
+    run('get_catalog'),
+  );
+
+  server.registerTool(
+    'report_capabilities',
+    {
+      title: '쓸 수 있는 도구 알리기',
+      description:
+        'Tell ThoughtFlow the names of the skills, slash commands, connectors (MCP servers) and sub-agent types you can actually use now. Returns the plan tools you do not have, so you can tell the user before starting. Call it once at the start of a plan.',
+      inputSchema: { ...toolLists, subagents: z.array(z.string().min(1)).max(100).optional().describe('Sub-agent types, e.g. "general-purpose"') },
+      annotations: { ...planWrite, idempotentHint: true },
+    },
+    run('report_capabilities'),
+  );
+
+  server.registerPrompt(
+    'run_plan',
+    {
+      title: '계획대로 진행하기',
+      description: 'ThoughtFlow에 사용자가 만든 계획을 읽고, 단계마다 지정한 도구로, 계획에 적힌 그대로 진행합니다.',
+    },
+    () => ({
+      messages: [
+        {
+          role: 'user' as const,
+          content: {
+            type: 'text' as const,
+            text: [
+              'ThoughtFlow에 열려 있는 내 계획을 내가 설계한 그대로 진행해 줘.',
+              '1. get_plan으로 계획 전체를 읽고, report_capabilities로 네가 지금 쓸 수 있는 스킬·명령어·커넥터·서브 에이전트 이름을 알려 줘. 계획에 있는데 없는 도구가 있으면 시작하기 전에 나에게 말해 줘.',
+              '2. next_steps로 다음 단계를 고르고 start_step으로 시작해. 받은 작업 지시서를 그대로 따라.',
+              '3. 단계에 지정된 도구를 써: 스킬은 Skill 도구로, 명령어는 그 슬래시 명령으로, 커넥터는 그 MCP 서버의 도구로, 서브 에이전트는 Agent 도구(subagent_type)로.',
+              '4. 만들 것에 적힌 것만 만들고, 참고 자료를 따르고, 하지 말 것은 하지 마. 계획에 없는 것을 더하지 마.',
+              '5. 완료 기준을 하나씩 직접 확인하고 근거와 함께 finish_step으로 보고해. 통과하지 못하면 계속 고치거나 fail_step으로 알려 줘.',
+              '6. 계획에 없는 결정은 ask_user로 묻고 기다려. 계획이 틀려 보이면 propose_change로 제안만 하고 계획대로 해.',
+              '7. 승인·검토·사람 단계는 내가 ThoughtFlow에서 처리할 때까지 기다려. 계획에 없는 위험한 일(지우기, 배포, 돈이 드는 일 등)은 하지 마.',
+              '8. 단계를 끝낼 때마다 다음 단계로 넘어가고, 더 할 단계가 없으면 next_steps가 알려 주는 이유를 나에게 짧게 말해 줘.',
+            ].join('\n'),
+          },
+        },
+      ],
+    }),
   );
 
   server.registerPrompt(

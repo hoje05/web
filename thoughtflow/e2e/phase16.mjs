@@ -47,7 +47,7 @@ try {
 
   // ── 도구 목록
   const tools = (await claude.listTools()).tools.map((t) => t.name);
-  assert(tools.length === 11 && tools.includes('add_flow') && tools.includes('get_board'), `extension lists tools (${tools.length})`);
+  assert(tools.length === 22 && tools.includes('add_flow') && tools.includes('get_board'), `extension lists tools (${tools.length})`);
   assert((claude.getInstructions() ?? '').includes('thinking map'), 'server instructions tell the AI how to use the board');
 
   // ── 빈 보드 읽기
@@ -226,7 +226,7 @@ try {
 
   const gpt = new Client({ name: 'openai-mcp', version: '1.0.0' });
   await gpt.connect(new StreamableHTTPClientTransport(new URL(localUrl)));
-  assert((await gpt.listTools()).tools.length === 11, 'ChatGPT endpoint lists the same tools');
+  assert((await gpt.listTools()).tools.length === 22, 'ChatGPT endpoint lists the same tools');
   const gptBoard = await call('get_board', {}, gpt);
   assert(text(gptBoard).includes('제주도 여행 가고 싶다'), 'ChatGPT reads the same board');
   await call('add_flow', { after: '기차 + 배', boxes: [{ title: '배편 시간 확인' }] }, gpt);

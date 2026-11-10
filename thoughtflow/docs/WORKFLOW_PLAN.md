@@ -265,7 +265,7 @@ interface Doc { …; workflow?: WorkflowMeta }
 | **1. 모델** ✅ | v0.11 | StepInfo·WorkflowMeta, 파일 형식 v4 + 예전 파일 읽기, docOps, `src/workflow/graph·transitions·resources` | 단위 테스트: 위상 정렬, ready 계산, 순환, 상태 규칙, v3→v4 |
 | **2. 화면** ✅ | v0.11 | StepProps(계획 블록 설정), 보드 상태 표시·ready 강조, 진행률, 계획 창(목록·설정·점검) | e2e: 블록 만들기·도구 고르기·상태 바꾸기·Undo·다시 열기 |
 | **3. 카탈로그** ✅ | v0.12 | electron/catalog.ts, ResourcePicker 자동 완성, 직접 입력, "확인 안 됨" 표시 | 단위: SKILL.md·agents 앞부분 읽기 / e2e: 가짜 ~/.claude 폴더로 목록 |
-| **4. MCP 진행 도구** | v0.12 | get_plan·next_steps·start/finish/fail/log_step·request_approval·ask_user·propose_change·get_catalog·report_capabilities, 권한, run_plan 프롬프트, 지시문 | e2e: 실제 MCP 클라이언트로 3단계 계획을 끝까지 진행 / 순서 어김·결과물 누락·기준 실패·계획 수정 시도가 거부되는지 / 질문→답→이어서 진행 / 검토 대기 |
+| **4. MCP 진행 도구** ✅ | v0.13 | get_plan·next_steps·start/finish/fail/log_step·request_approval·ask_user·propose_change·get_catalog·report_capabilities, 권한, run_plan 프롬프트, 지시문 | e2e: 실제 MCP 클라이언트로 3단계 계획을 끝까지 진행 / 순서 어김·결과물 누락·기준 실패·계획 수정 시도가 거부되는지 / 질문→답→이어서 진행 / 검토 대기 |
 | **5. Claude Code 연결** | v0.13 | Claude Code 등록·점검, "Claude로 진행하기" 명령 복사, 계획 → 스킬 만들기 | e2e: 가짜 홈 폴더에 등록 → 등록된 명령으로 실제 연결 (phase24 방식) |
 | **6. 계획 대비 결과·템플릿** | v0.13 | 계획 대비 결과 보기(결과물·기준·도구 비교), 계획 잠금·버전, 수정 제안 받아들이기, 템플릿 저장·불러오기 | e2e: 제안 받아들이면 버전이 오르고 기록에 남음 / 도구가 다르면 ⚠ |
 | **7. 다듬기** | v0.14 | 실패 경로 Route(`when: failed`), 단계별 서브 에이전트 파일 만들기(도구 제한), 스킬 결과 파일 가져오기, 앱에서 Claude Code 실행(선택), 문서·도움말 | 문서·사용 설명서·릴리스 노트 |
@@ -338,3 +338,13 @@ tests/workflow*.test.ts, e2e/phase27~31.mjs
 - 화면: 도구 칸 자동 완성(설명·출처), 목록에 없는 이름은 점선, 계획 창의 찾은 도구 수·다시 찾기
 - claude.ai 커넥터는 PC에서 찾을 수 없음 → 직접 입력. Claude가 알려 주는 목록(report_capabilities)은 4단계에서
 - 테스트: `tests/catalog.test.ts`, `e2e/phase28.mjs`
+
+### 4단계 (Claude가 계획을 진행) — 완료 (v0.13.0)
+- MCP 도구 11개 추가 (모두 22개): `get_plan`(id를 주면 그 단계의 작업 지시서), `next_steps`(없으면 왜 기다리는지), `start_step`(작업 지시서를 돌려줌),
+  `request_approval`, `log_step`, `ask_user`, `finish_step`, `fail_step`, `propose_change`, `get_catalog`, `report_capabilities`. 프롬프트 `run_plan`, 서버 지시문에 계획 규칙
+- `src/workflow/planText.ts`: 계획 전체 글, 다음 단계 설명, 작업 지시서(기본 도구 + 단계 도구와 쓰는 법, 하지 말 것, 앞 단계 결과, 되돌림 이유, 답, 보고 방법)
+- 보드 도구로는 계획 블록을 고치거나 지울 수 없고, 계획 블록끼리의 Route(진행 순서)도 바꿀 수 없다 (`boardOps.ts`). get_board는 계획 블록을 표시
+- `report_capabilities`: Claude가 가진 도구를 받아 계획에 있는데 없는 도구를 알려 주고, 앱을 끌 때까지 도구 목록에 함께 보여 줌 (출처 "Claude가 알려 줌")
+- 계획 변경마다 Undo 한 칸 + 알림 (시작·질문·승인 요청·완료·실패·제안)
+- 구조화 JSON(structuredContent)은 넣지 않았다 — 글로 충분하고 Claude 앱마다 지원이 달라서
+- 테스트: `tests/planText.test.ts`, `e2e/phase29.mjs` (실제 MCP 클라이언트로 3단계 계획 끝까지)

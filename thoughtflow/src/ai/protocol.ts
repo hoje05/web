@@ -15,6 +15,18 @@ export const AI_TOOL_NAMES = [
   'list_projects',
   'open_project',
   'create_project',
+  // 계획 진행 (사람이 만든 계획을 읽고 상태·결과만 적는다 — 계획을 만들거나 고치는 도구는 없다)
+  'get_plan',
+  'next_steps',
+  'start_step',
+  'request_approval',
+  'log_step',
+  'ask_user',
+  'finish_step',
+  'fail_step',
+  'propose_change',
+  'get_catalog',
+  'report_capabilities',
 ] as const;
 
 export type AiToolName = (typeof AI_TOOL_NAMES)[number];
