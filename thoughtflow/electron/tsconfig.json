@@ -1,0 +1,14 @@
+{
+  // 타입 검사 전용 (빌드는 scripts/build-electron.mjs 의 esbuild)
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["./*.ts", "../mcp/*.ts"]
+}
